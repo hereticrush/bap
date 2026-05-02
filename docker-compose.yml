@@ -1,0 +1,30 @@
+# ──────────────────────────────────────────────
+# bap — Docker Compose (Production / VPS)
+#
+# Services:
+#   app   — Go application (scheduler + workers + health server)
+#   redis — Asynq message broker
+# ──────────────────────────────────────────────
+
+services:
+  app:
+    image: ghcr.io/hereticrush/bap:latest
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file: .env
+    ports:
+      - "127.0.0.1:8081:8081"    # /healthz — localhost only
+    volumes:
+      - ./data:/app/data                          # SQLite database persistence
+      - ./youtube_token.json:/app/youtube_token.json:ro  # YouTube OAuth token
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

@@ -1,0 +1,26 @@
+# Compiled binary
+bap
+
+# Environment secrets (NEVER commit these)
+.env
+
+# SQLite database files (generated at runtime)
+*.db
+*.db-wal
+*.db-shm
+
+# IDE and OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Docker runtime
+docker-compose.override.yml
+
+# Downloaded videos (temporary VPS artifacts)
+tmp/
+
+# Go build cache
+/vendor/
