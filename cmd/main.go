@@ -15,12 +15,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/hereticrush/bap/internal/adapter/prompt"
 	"github.com/hereticrush/bap/internal/batch"
 	"github.com/hereticrush/bap/internal/config"
 	"github.com/hereticrush/bap/internal/db"
+	"github.com/hereticrush/bap/internal/health"
 )
 
 func main() {
@@ -66,8 +71,33 @@ func runServe() {
 		"health_port", cfg.HealthPort,
 	)
 
-	/* TODO: Initialize Asynq scheduler, workers, health server */
-	fmt.Println("bap: serve — scheduler and workers not yet wired")
+	/* Start the /healthz HTTP server in a background goroutine */
+	healthSrv := health.New(cfg.HealthPort, database)
+	go func() {
+		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("health server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	/* TODO: Initialize Asynq scheduler and workers here */
+
+	/* Block until SIGINT or SIGTERM */
+	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-sigCtx.Done()
+
+	slog.Info("shutdown signal received, draining...")
+
+	/* Graceful shutdown with a 5-second deadline */
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := healthSrv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("health server shutdown error", "error", err)
+	}
+
+	slog.Info("bap stopped gracefully")
 }
 
 /*

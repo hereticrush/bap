@@ -132,3 +132,19 @@ func migrate(db *sql.DB) error {
 	)
 	return nil
 }
+
+/*
+ * CountJobsByStatus returns the number of video_jobs rows
+ * with the given status value. Uses the idx_video_jobs_status
+ * index for efficient lookup.
+ *
+ * Useful for the /healthz endpoint to surface pipeline state
+ * (e.g., how many jobs are PENDING or FAILED).
+ */
+func CountJobsByStatus(db *sql.DB, status string) (int, error) {
+	var count int
+	err := db.QueryRow(
+		"SELECT COUNT(*) FROM video_jobs WHERE status = ?", status,
+	).Scan(&count)
+	return count, err
+}
