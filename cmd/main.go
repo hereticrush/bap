@@ -192,7 +192,8 @@ func selectBuilder(cfg *config.Config) (prompt.AIPromptBuilder, error) {
 	switch cfg.ActivePromptBuilder {
 	case "PASSTHROUGH":
 		return prompt.NewPassthroughAdapter(), nil
-	/* TODO: case "GEMINI": return prompt.NewGeminiAdapter(cfg.GeminiAPIKey, cfg.GeminiModel), nil */
+	case "GEMINI":
+		return prompt.NewGeminiAdapter(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.GeminiMaxPerHour), nil
 	default:
 		return nil, fmt.Errorf("unknown prompt builder: %s", cfg.ActivePromptBuilder)
 	}

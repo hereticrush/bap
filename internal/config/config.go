@@ -25,6 +25,7 @@ type Config struct {
 	ActivePromptBuilder string /* GEMINI, PASSTHROUGH */
 	GeminiAPIKey        string
 	GeminiModel         string
+	GeminiMaxPerHour    int    /* Sliding-window hourly rate limit for Gemini API */
 
 	/* Cloud Storage (S3 / Cloudflare R2) */
 	S3Bucket    string
@@ -69,6 +70,13 @@ func Load() (*Config, error) {
 	cfg.ActivePromptBuilder = withDefault("ACTIVE_PROMPT_BUILDER", "PASSTHROUGH")
 	cfg.GeminiAPIKey = os.Getenv("GEMINI_API_KEY")
 	cfg.GeminiModel = withDefault("GEMINI_MODEL", "gemini-2.5-flash")
+
+	geminiRateStr := withDefault("GEMINI_MAX_PER_HOUR", "30")
+	geminiRate, err := strconv.Atoi(geminiRateStr)
+	if err != nil {
+		return nil, fmt.Errorf("GEMINI_MAX_PER_HOUR must be a valid integer: %w", err)
+	}
+	cfg.GeminiMaxPerHour = geminiRate
 
 	/* --- Cloud Storage --- */
 	cfg.S3Bucket = os.Getenv("S3_BUCKET")
