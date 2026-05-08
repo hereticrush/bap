@@ -20,6 +20,8 @@ type Config struct {
 	/* AI Video Provider */
 	ActiveAIProvider string /* RUNWAY, LUMA, KLING */
 	RunwayAPIKey     string
+	RunwayModel      string /* gen3a_turbo, gen4_turbo, gen4.5, etc. */
+	RunwayMaxPerHour int    /* Sliding-window hourly rate limit for Runway API */
 
 	/* AI Prompt Builder */
 	ActivePromptBuilder string /* GEMINI, PASSTHROUGH */
@@ -65,6 +67,14 @@ func Load() (*Config, error) {
 	}
 	cfg.ActiveAIProvider = val
 	cfg.RunwayAPIKey = os.Getenv("RUNWAY_API_KEY")
+	cfg.RunwayModel = withDefault("RUNWAY_MODEL", "gen3a_turbo")
+
+	runwayRateStr := withDefault("RUNWAY_MAX_PER_HOUR", "10")
+	runwayRate, err := strconv.Atoi(runwayRateStr)
+	if err != nil {
+		return nil, fmt.Errorf("RUNWAY_MAX_PER_HOUR must be a valid integer: %w", err)
+	}
+	cfg.RunwayMaxPerHour = runwayRate
 
 	/* --- AI Prompt Builder --- */
 	cfg.ActivePromptBuilder = withDefault("ACTIVE_PROMPT_BUILDER", "PASSTHROUGH")
