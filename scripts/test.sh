@@ -8,10 +8,10 @@
 #
 # Usage: ./scripts/test.sh
 
-echo "Running tests in Docker container (golang:1.23-alpine)..."
+echo "Running tests in Docker container (golang:1.24-alpine)..."
 
 docker run --rm \
   -v "$(pwd)":/src \
   -w /src \
-  golang:1.23-alpine \
+  golang:1.24-alpine \
   sh -c "apk add --no-cache gcc musl-dev > /dev/null && CGO_ENABLED=1 go test -v ./..."
