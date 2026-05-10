@@ -26,6 +26,7 @@ import (
 	"github.com/hereticrush/bap/internal/config"
 	"github.com/hereticrush/bap/internal/db"
 	"github.com/hereticrush/bap/internal/health"
+	"github.com/hereticrush/bap/internal/worker"
 )
 
 func main() {
@@ -80,7 +81,20 @@ func runServe() {
 		}
 	}()
 
-	/* TODO: Initialize Asynq scheduler and workers here */
+	/* Initialize Asynq scheduler and workers */
+	go func() {
+		if err := worker.RunServer(cfg.RedisURL, database); err != nil {
+			slog.Error("asynq worker server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	go func() {
+		if err := worker.RunScheduler(cfg.RedisURL); err != nil {
+			slog.Error("asynq scheduler failed", "error", err)
+			os.Exit(1)
+		}
+	}()
 
 	/* Block until SIGINT or SIGTERM */
 	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
