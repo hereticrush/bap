@@ -8,11 +8,6 @@
 #
 # Usage: ./scripts/test.sh
 
-if [ -z "$GOPATH" ]; then
-  echo "GOPATH is not set. Please set it before running this script."
-  exit 1
-fi
-
 echo "Running tests in Docker container (golang:1.24-alpine)..."
 
 docker run --rm \
