@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/hereticrush/bap/internal/adapter/prompt"
+	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/batch"
 	"github.com/hereticrush/bap/internal/config"
 	"github.com/hereticrush/bap/internal/db"
@@ -81,9 +82,16 @@ func runServe() {
 		}
 	}()
 
+	/* Select the AI video provider */
+	videoProvider, err := selectVideoProvider(cfg)
+	if err != nil {
+		slog.Error("failed to select video provider", "error", err)
+		os.Exit(1)
+	}
+
 	/* Initialize Asynq scheduler and workers */
 	go func() {
-		if err := worker.RunServer(cfg.RedisURL, database); err != nil {
+		if err := worker.RunServer(cfg.RedisURL, database, videoProvider); err != nil {
 			slog.Error("asynq worker server failed", "error", err)
 			os.Exit(1)
 		}
@@ -210,6 +218,19 @@ func selectBuilder(cfg *config.Config) (prompt.AIPromptBuilder, error) {
 		return prompt.NewGeminiAdapter(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.GeminiMaxPerHour), nil
 	default:
 		return nil, fmt.Errorf("unknown prompt builder: %s", cfg.ActivePromptBuilder)
+	}
+}
+
+/*
+ * selectVideoProvider returns the AIVideoProvider adapter matching
+ * the ACTIVE_AI_PROVIDER config value.
+ */
+func selectVideoProvider(cfg *config.Config) (video.AIVideoProvider, error) {
+	switch cfg.ActiveAIProvider {
+	case "RUNWAY":
+		return video.NewRunwayAdapter(cfg.RunwayAPIKey, cfg.RunwayModel, cfg.RunwayMaxPerHour), nil
+	default:
+		return nil, fmt.Errorf("unknown video provider: %s", cfg.ActiveAIProvider)
 	}
 }
 

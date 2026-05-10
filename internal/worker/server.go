@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hibiken/asynq"
 )
 
@@ -19,7 +20,7 @@ import (
  * RunServer starts the Asynq worker server to consume background jobs.
  * This is a blocking call, it should be run in a goroutine.
  */
-func RunServer(redisURL string, db *sql.DB) error {
+func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider) error {
 	redisConnOpt, err := asynq.ParseRedisURI(redisURL)
 	if err != nil {
 		return fmt.Errorf("parse redis url: %w", err)
@@ -38,9 +39,17 @@ func RunServer(redisURL string, db *sql.DB) error {
 		},
 	)
 
+	processor := &VideoProcessor{
+		DB:       db,
+		Provider: provider,
+		Client:   asynq.NewClient(redisConnOpt),
+	}
+	defer processor.Client.Close()
+
 	mux := asynq.NewServeMux()
-	/* TODO: Register task handlers here in Phase 2 */
-	/* mux.HandleFunc(TypeGenerateVideo, handleGenerateVideoTask) */
+	mux.HandleFunc(TypeGenerateVideo, processor.HandleGenerateVideoTask)
+	mux.HandleFunc(TypePollStatus, processor.HandlePollStatusTask)
+	mux.HandleFunc(TypeDownloadVideo, processor.HandleDownloadVideoTask)
 
 	slog.Info("starting asynq worker server", "redis_url", redisURL)
 	if err := srv.Run(mux); err != nil {
