@@ -8,10 +8,15 @@
 #
 # Usage: ./scripts/test.sh
 
+if [ -z "$GOPATH" ]; then
+  echo "GOPATH is not set. Please set it before running this script."
+  exit 1
+fi
+
 echo "Running tests in Docker container (golang:1.24-alpine)..."
 
 docker run --rm \
   -v "$(pwd)":/src \
   -w /src \
   golang:1.24-alpine \
-  sh -c "apk add --no-cache gcc musl-dev > /dev/null && CGO_ENABLED=1 go test -v ./..."
+  sh -c "apk add --no-cache gcc musl-dev > /dev/null && go mod download && CGO_ENABLED=1 go test -v ./..."
