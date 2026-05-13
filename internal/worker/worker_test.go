@@ -14,6 +14,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/hereticrush/bap/internal/adapter/video"
+	"hereticrush/bap/internal/publisher"
 	"github.com/hibiken/asynq"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -34,6 +35,18 @@ func (m *mockVideoProvider) GenerateVideo(ctx context.Context, req video.Generat
 func (m *mockVideoProvider) CheckStatus(ctx context.Context, taskID string) (video.GenerationResult, error) {
 	m.checkCalled = true
 	return m.statusToReturn, nil
+}
+
+/* Mock publisher for testing */
+type mockPublisher struct {
+	resultToReturn publisher.PublishResult
+	publishCalled  bool
+}
+
+func (m *mockPublisher) Name() string { return "MOCK_PUBLISHER" }
+func (m *mockPublisher) Publish(ctx context.Context, req publisher.PublishRequest) (publisher.PublishResult, error) {
+	m.publishCalled = true
+	return m.resultToReturn, nil
 }
 
 func setupTestDB(t *testing.T) *sql.DB {
@@ -62,7 +75,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 			retry_count INTEGER DEFAULT 0,
 			ai_task_id TEXT,
 			cloud_storage_url TEXT,
-			youtube_video_id TEXT,
+			published_video_id TEXT,
+			metadata TEXT,
 			error_log TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -91,11 +105,14 @@ func TestHandleGenerateVideoTask(t *testing.T) {
 	defer client.Close()
 
 	provider := &mockVideoProvider{taskIDToReturn: "task_123"}
+	pub := &mockPublisher{}
 	
 	processor := &VideoProcessor{
-		DB:       db,
-		Provider: provider,
-		Client:   client,
+		DB:             db,
+		Provider:       provider,
+		Publisher:      pub,
+		Client:         client,
+		VideoOutputDir: "data/videos",
 	}
 
 	/* 4. Execute the handler directly */
@@ -115,5 +132,45 @@ func TestHandleGenerateVideoTask(t *testing.T) {
 	db.QueryRow("SELECT status FROM video_jobs LIMIT 1").Scan(&status)
 	if status != "PROCESSING" {
 		t.Errorf("expected job status PROCESSING, got %q", status)
+	}
+}
+
+func TestHandlePublishVideoTask(t *testing.T) {
+	mr := miniredis.RunT(t)
+	db := setupTestDB(t)
+	defer db.Close()
+
+	client := asynq.NewClient(asynq.RedisClientOpt{Addr: mr.Addr()})
+	defer client.Close()
+
+	/* Seed a COMPLETED job */
+	db.Exec("INSERT INTO prompts (id, seed_text, enriched_text, status, builder_used) VALUES (1, 'a', 'b', 'USED', 'TEST')")
+	db.Exec("INSERT INTO video_jobs (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status, cloud_storage_url) VALUES ('job_1', 1, 'mock prompt', 'TEST', 'RUNWAY', 'COMPLETED', 'http://url')")
+
+	pub := &mockPublisher{
+		resultToReturn: publisher.PublishResult{PlatformVideoID: "yt_123", URL: "http://yt"},
+	}
+
+	processor := &VideoProcessor{
+		DB:             db,
+		Publisher:      pub,
+		Client:         client,
+		VideoOutputDir: "data/videos",
+	}
+
+	task := asynq.NewTask(TypePublishVideo, []byte(`{"job_id":"job_1"}`))
+	err := processor.HandlePublishVideoTask(context.Background(), task)
+	if err != nil {
+		t.Fatalf("HandlePublishVideoTask failed: %v", err)
+	}
+
+	if !pub.publishCalled {
+		t.Error("expected Publish to be called")
+	}
+
+	var status string
+	db.QueryRow("SELECT status FROM video_jobs WHERE id = 'job_1'").Scan(&status)
+	if status != "PUBLISHED" {
+		t.Errorf("expected job status PUBLISHED, got %q", status)
 	}
 }

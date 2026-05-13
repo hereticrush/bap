@@ -12,7 +12,7 @@ const (
 	TypeGenerateVideo = "video:generate"
 	TypePollStatus    = "video:poll"
 	TypeDownloadVideo = "video:download"
-	TypeUploadYouTube = "video:upload_youtube"
+	TypePublishVideo  = "video:publish"
 )
 
 /* Add any struct definitions for task payloads here if needed in the future. */

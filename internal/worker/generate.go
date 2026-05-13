@@ -16,6 +16,7 @@ import (
 
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/db"
+	"hereticrush/bap/internal/publisher"
 	"github.com/hibiken/asynq"
 )
 
@@ -24,9 +25,11 @@ import (
  * worker handlers to process jobs.
  */
 type VideoProcessor struct {
-	DB       *sql.DB
-	Provider video.AIVideoProvider
-	Client   *asynq.Client
+	DB             *sql.DB
+	Provider       video.AIVideoProvider
+	Publisher      publisher.Publisher
+	Client         *asynq.Client
+	VideoOutputDir string
 }
 
 /*

@@ -18,11 +18,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/hereticrush/bap/internal/adapter/prompt"
 	"github.com/hereticrush/bap/internal/adapter/video"
+	"github.com/hereticrush/bap/internal/adapter/youtube"
 	"github.com/hereticrush/bap/internal/batch"
 	"github.com/hereticrush/bap/internal/config"
 	"github.com/hereticrush/bap/internal/db"
@@ -89,9 +91,15 @@ func runServe() {
 		os.Exit(1)
 	}
 
+	/* Initialize the YouTube publisher */
+	youtubePublisher := youtube.NewPublisher(
+		filepath.Join("credentials", "youtube", "client_secret.json"),
+		filepath.Join("credentials", "youtube", "token.json"),
+	)
+
 	/* Initialize Asynq scheduler and workers */
 	go func() {
-		if err := worker.RunServer(cfg.RedisURL, database, videoProvider); err != nil {
+		if err := worker.RunServer(cfg.RedisURL, database, videoProvider, youtubePublisher, filepath.Join("data", "videos")); err != nil {
 			slog.Error("asynq worker server failed", "error", err)
 			os.Exit(1)
 		}

@@ -33,11 +33,17 @@ func RunScheduler(redisURL string) error {
 		},
 	)
 
-	/* TODO: Register periodic tasks here in Phase 4 */
-	/* 
-	 * Example: poll status every 5 minutes
-	 * scheduler.Register("@every 5m", asynq.NewTask(TypePollStatus, nil))
-	 */
+	/* 1. Poll for processing jobs every minute */
+	pollTask := asynq.NewTask(TypePollStatus, nil)
+	if _, err := scheduler.Register("* * * * *", pollTask); err != nil {
+		return fmt.Errorf("register poll task: %w", err)
+	}
+
+	/* 2. Generate new videos every 6 hours (0, 6, 12, 18) */
+	genTask := asynq.NewTask(TypeGenerateVideo, nil)
+	if _, err := scheduler.Register("0 */6 * * *", genTask); err != nil {
+		return fmt.Errorf("register generate task: %w", err)
+	}
 
 	slog.Info("starting asynq scheduler")
 	if err := scheduler.Run(); err != nil {

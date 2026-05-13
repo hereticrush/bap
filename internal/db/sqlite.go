@@ -88,7 +88,8 @@ func migrate(db *sql.DB) error {
 			enriched_text TEXT    NOT NULL,
 			status        TEXT    NOT NULL DEFAULT 'UNUSED',
 			tokens_used   INTEGER NOT NULL DEFAULT 0,
-			builder_used  TEXT    NOT NULL DEFAULT ''
+			builder_used  TEXT    NOT NULL DEFAULT '',
+			metadata      TEXT
 		)`,
 
 		/* prompt_config — per-batch metadata (system prompt, target provider) */
@@ -108,7 +109,8 @@ func migrate(db *sql.DB) error {
 			retry_count           INTEGER NOT NULL DEFAULT 0,
 			ai_task_id            TEXT,
 			cloud_storage_url     TEXT,
-			youtube_video_id      TEXT,
+			published_video_id    TEXT,
+			metadata              TEXT,
 			error_log             TEXT,
 			created_at            TEXT    NOT NULL DEFAULT (datetime('now')),
 			updated_at            TEXT    NOT NULL DEFAULT (datetime('now')),

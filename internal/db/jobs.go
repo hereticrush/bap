@@ -29,7 +29,8 @@ type VideoJob struct {
 	RetryCount          int
 	AITaskID            string
 	CloudStorageURL     string
-	YouTubeVideoID      string
+	PublishedVideoID    string
+	Metadata            string
 	ErrorLog            string
 	CreatedAt           string
 	UpdatedAt           string
@@ -140,6 +141,23 @@ func SetJobCompleted(db *sql.DB, jobID string, videoURL string) error {
 		     updated_at = datetime('now'), completed_at = datetime('now')
 		 WHERE id = ?`,
 		videoURL, jobID,
+	)
+	return err
+}
+
+/*
+ * SetJobPublished marks a job as PUBLISHED and stores the
+ * platform-specific video ID (e.g., YouTube Video ID).
+ *
+ * Called after Publisher.Publish() returns successfully.
+ */
+func SetJobPublished(db *sql.DB, jobID string, platformID string) error {
+	_, err := db.Exec(
+		`UPDATE video_jobs
+		 SET status = 'PUBLISHED', published_video_id = ?,
+		     updated_at = datetime('now')
+		 WHERE id = ?`,
+		platformID, jobID,
 	)
 	return err
 }
