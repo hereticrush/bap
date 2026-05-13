@@ -11,9 +11,11 @@ package worker
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
+	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/db"
 	"hereticrush/bap/internal/publisher"
@@ -28,6 +30,7 @@ type VideoProcessor struct {
 	DB             *sql.DB
 	Provider       video.AIVideoProvider
 	Publisher      publisher.Publisher
+	TTSProvider    tts.TTSProvider
 	Client         *asynq.Client
 	VideoOutputDir string
 }
@@ -54,6 +57,17 @@ func (p *VideoProcessor) HandleGenerateVideoTask(ctx context.Context, t *asynq.T
 		Prompt:      job.PromptTextSnapshot,
 		Duration:    5,
 		AspectRatio: "1280:720",
+	}
+
+	if job.Metadata != "" {
+		var meta struct {
+			ImageAnchors []string `json:"image_anchors"`
+		}
+		if err := json.Unmarshal([]byte(job.Metadata), &meta); err == nil {
+			req.ImageURLs = meta.ImageAnchors
+		} else {
+			slog.Warn("failed to parse job metadata", "job_id", job.ID, "error", err)
+		}
 	}
 
 	/* 3. Submit to AI Provider */

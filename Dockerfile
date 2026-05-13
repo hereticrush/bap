@@ -21,8 +21,8 @@ RUN CGO_ENABLED=1 go build -o /bin/bap ./cmd/main.go
 # ──────────────────────────────────────────────
 FROM alpine:3.20
 
-# Runtime C library needed by CGO-compiled binary
-RUN apk add --no-cache ca-certificates
+# Runtime C library needed by CGO-compiled binary, and ffmpeg for audio/video merging
+RUN apk add --no-cache ca-certificates ffmpeg
 
 WORKDIR /app
 

@@ -113,6 +113,10 @@ func (r *RunwayAdapter) GenerateVideo(ctx context.Context, req GenerationRequest
 		Duration:   duration,
 	}
 
+	if len(req.ImageURLs) > 0 {
+		payload.PromptImage = req.ImageURLs[0]
+	}
+
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("marshal request: %w", err)
@@ -276,10 +280,11 @@ func (r *RunwayAdapter) setHeaders(req *http.Request) {
  * Omitting promptImage enables pure text-to-video mode.
  */
 type runwayCreateRequest struct {
-	Model      string `json:"model"`
-	PromptText string `json:"promptText"`
-	Ratio      string `json:"ratio"`
-	Duration   int    `json:"duration"`
+	Model       string `json:"model"`
+	PromptText  string `json:"promptText"`
+	PromptImage string `json:"promptImage,omitempty"`
+	Ratio       string `json:"ratio"`
+	Duration    int    `json:"duration"`
 }
 
 /* runwayCreateResponse holds the task ID returned after submission. */

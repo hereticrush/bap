@@ -12,6 +12,7 @@ const (
 	TypeGenerateVideo = "video:generate"
 	TypePollStatus    = "video:poll"
 	TypeDownloadVideo = "video:download"
+	TypeAddAudio      = "video:add_audio"
 	TypePublishVideo  = "video:publish"
 )
 

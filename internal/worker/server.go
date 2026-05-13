@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"hereticrush/bap/internal/publisher"
 	"github.com/hibiken/asynq"
@@ -21,7 +22,7 @@ import (
  * RunServer starts the Asynq worker server to consume background jobs.
  * This is a blocking call, it should be run in a goroutine.
  */
-func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub publisher.Publisher, videoOutputDir string) error {
+func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub publisher.Publisher, ttsProv tts.TTSProvider, videoOutputDir string) error {
 	redisConnOpt, err := asynq.ParseRedisURI(redisURL)
 	if err != nil {
 		return fmt.Errorf("parse redis url: %w", err)
@@ -44,6 +45,7 @@ func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub 
 		DB:             db,
 		Provider:       provider,
 		Publisher:      pub,
+		TTSProvider:    ttsProv,
 		Client:         asynq.NewClient(redisConnOpt),
 		VideoOutputDir: videoOutputDir,
 	}
@@ -53,6 +55,7 @@ func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub 
 	mux.HandleFunc(TypeGenerateVideo, processor.HandleGenerateVideoTask)
 	mux.HandleFunc(TypePollStatus, processor.HandlePollStatusTask)
 	mux.HandleFunc(TypeDownloadVideo, processor.HandleDownloadVideoTask)
+	mux.HandleFunc(TypeAddAudio, processor.HandleAddAudioTask)
 	mux.HandleFunc(TypePublishVideo, processor.HandlePublishVideoTask)
 
 	slog.Info("starting asynq worker server", "redis_url", redisURL)

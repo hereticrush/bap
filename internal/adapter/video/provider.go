@@ -24,10 +24,11 @@ const (
  * for a video generation call.
  */
 type GenerationRequest struct {
-	Prompt      string /* The enriched prompt text */
-	Duration    int    /* Target duration in seconds */
-	Resolution  string /* e.g., "1080p" */
-	AspectRatio string /* e.g., "16:9" */
+	Prompt      string   /* The enriched prompt text */
+	Duration    int      /* Target duration in seconds */
+	Resolution  string   /* e.g., "1080p" */
+	AspectRatio string   /* e.g., "16:9" */
+	ImageURLs   []string /* Optional images used as generation anchors */
 }
 
 /*

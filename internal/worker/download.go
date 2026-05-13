@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/hereticrush/bap/internal/db"
 	"github.com/hibiken/asynq"
 )
 
@@ -73,6 +74,17 @@ func (p *VideoProcessor) HandleDownloadVideoTask(ctx context.Context, t *asynq.T
 		return fmt.Errorf("copy stream: %w", err)
 	}
 
-	slog.Info("video download complete", "job_id", payload.JobID, "file", filePath)
+	/* Update Database to VIDEO_READY */
+	if err := db.SetJobVideoReady(p.DB, payload.JobID); err != nil {
+		return fmt.Errorf("set job video ready: %w", err)
+	}
+
+	/* Enqueue Add Audio Task */
+	audioTask := asynq.NewTask(TypeAddAudio, t.Payload())
+	if _, err := p.Client.EnqueueContext(ctx, audioTask); err != nil {
+		return fmt.Errorf("enqueue add audio task: %w", err)
+	}
+
+	slog.Info("video download complete, enqueued audio task", "job_id", payload.JobID, "file", filePath)
 	return nil
 }

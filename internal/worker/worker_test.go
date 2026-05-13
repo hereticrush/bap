@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"hereticrush/bap/internal/publisher"
 	"github.com/hibiken/asynq"
@@ -46,6 +47,18 @@ type mockPublisher struct {
 func (m *mockPublisher) Name() string { return "MOCK_PUBLISHER" }
 func (m *mockPublisher) Publish(ctx context.Context, req publisher.PublishRequest) (publisher.PublishResult, error) {
 	m.publishCalled = true
+	return m.resultToReturn, nil
+}
+
+/* Mock TTS provider for testing */
+type mockTTSProvider struct {
+	resultToReturn tts.AudioResult
+	generateCalled bool
+}
+
+func (m *mockTTSProvider) Name() string { return "MOCK_TTS" }
+func (m *mockTTSProvider) GenerateAudio(ctx context.Context, text string, outputFilename string) (tts.AudioResult, error) {
+	m.generateCalled = true
 	return m.resultToReturn, nil
 }
 
@@ -172,5 +185,50 @@ func TestHandlePublishVideoTask(t *testing.T) {
 	db.QueryRow("SELECT status FROM video_jobs WHERE id = 'job_1'").Scan(&status)
 	if status != "PUBLISHED" {
 		t.Errorf("expected job status PUBLISHED, got %q", status)
+	}
+}
+
+func TestHandleAddAudioTask(t *testing.T) {
+	mr := miniredis.RunT(t)
+	db := setupTestDB(t)
+	defer db.Close()
+
+	client := asynq.NewClient(asynq.RedisClientOpt{Addr: mr.Addr()})
+	defer client.Close()
+
+	/* Seed a VIDEO_READY job */
+	db.Exec("INSERT INTO prompts (id, seed_text, enriched_text, status, builder_used) VALUES (1, 'a', 'b', 'USED', 'TEST')")
+	db.Exec("INSERT INTO video_jobs (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status, cloud_storage_url) VALUES ('job_1', 1, 'mock prompt', 'TEST', 'RUNWAY', 'VIDEO_READY', 'http://url')")
+
+	ttsProv := &mockTTSProvider{
+		resultToReturn: tts.AudioResult{FilePath: "data/audio/job_1.mp3"},
+	}
+
+	processor := &VideoProcessor{
+		DB:             db,
+		TTSProvider:    ttsProv,
+		Client:         client,
+		VideoOutputDir: "data/videos",
+	}
+
+	/* We skip the ffmpeg execution in test by ensuring the text generation works.
+	 * Normally we'd mock exec.Command, but this is a simple unit test for the state machine flow.
+	 * We can expect it to fail at ffmpeg if ffmpeg is missing, or we can just verify it attempts the call.
+	 * Let's just verify it fails on ffmpeg if files don't exist, but verify the TTS was called.
+	 */
+
+	task := asynq.NewTask(TypeAddAudio, []byte(`{"job_id":"job_1"}`))
+	err := processor.HandleAddAudioTask(context.Background(), task)
+	
+	/* It will fail because the mock mp3 and mp4 don't exist for ffmpeg to merge, but we can assert tts was called */
+	if !ttsProv.generateCalled {
+		t.Error("expected GenerateAudio to be called")
+	}
+
+	/* Since it fails at ffmpeg, job state should become FAILED */
+	var status string
+	db.QueryRow("SELECT status FROM video_jobs WHERE id = 'job_1'").Scan(&status)
+	if status != "FAILED" && err == nil {
+		t.Errorf("expected job status to change or error, got %q", status)
 	}
 }

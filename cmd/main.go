@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/hereticrush/bap/internal/adapter/prompt"
+	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/adapter/youtube"
 	"github.com/hereticrush/bap/internal/batch"
@@ -97,9 +98,13 @@ func runServe() {
 		filepath.Join("credentials", "youtube", "token.json"),
 	)
 
+	/* Initialize the ElevenLabs TTS provider */
+	elevenlabsKey := os.Getenv("ELEVENLABS_API_KEY")
+	ttsProvider := tts.NewElevenLabsAdapter(elevenlabsKey, "nPczCjzI2devNBz1zQ07") // default voice Brian
+
 	/* Initialize Asynq scheduler and workers */
 	go func() {
-		if err := worker.RunServer(cfg.RedisURL, database, videoProvider, youtubePublisher, filepath.Join("data", "videos")); err != nil {
+		if err := worker.RunServer(cfg.RedisURL, database, videoProvider, youtubePublisher, ttsProvider, filepath.Join("data", "videos")); err != nil {
 			slog.Error("asynq worker server failed", "error", err)
 			os.Exit(1)
 		}

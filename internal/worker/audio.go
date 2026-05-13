@@ -1,0 +1,100 @@
+/*
+ * internal/worker/audio.go
+ *
+ * Implements the handler for the video:add_audio task.
+ * Sequentially generates TTS audio via ElevenLabs and merges it
+ * with the previously downloaded video using FFmpeg.
+ *
+ * Copyright (C) 2026 hereticrush — Licensed under GPL-3.0
+ */
+package worker
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
+
+	"github.com/hereticrush/bap/internal/db"
+	"github.com/hibiken/asynq"
+)
+
+/* HandleAddAudioTask processes the audio generation and merging step. */
+func (p *VideoProcessor) HandleAddAudioTask(ctx context.Context, t *asynq.Task) error {
+	var payload struct {
+		JobID string `json:"job_id"`
+	}
+	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	jobID := payload.JobID
+	slog.Info("processing add audio task", "job_id", jobID)
+
+	/* 1. Fetch the job to get the text */
+	var textToRead string
+	err := p.DB.QueryRow("SELECT prompt_text_snapshot FROM video_jobs WHERE id = ?", jobID).Scan(&textToRead)
+	if err != nil {
+		return fmt.Errorf("fetch job text: %w", err)
+	}
+
+	/* 2. Generate Audio via ElevenLabs */
+	audioDir := filepath.Join("data", "audio")
+	audioPath := filepath.Join(audioDir, fmt.Sprintf("%s.mp3", jobID))
+	
+	audioRes, err := p.TTSProvider.GenerateAudio(ctx, textToRead, audioPath)
+	if err != nil {
+		if setErr := db.SetJobFailed(p.DB, jobID, fmt.Sprintf("audio generation: %v", err)); setErr != nil {
+			slog.Error("failed to set job failed status", "job_id", jobID, "error", setErr)
+		}
+		return fmt.Errorf("generate audio: %w", err)
+	}
+
+	/* 3. Execute FFmpeg to merge Audio and Video */
+	videoPath := filepath.Join(p.VideoOutputDir, fmt.Sprintf("%s.mp4", jobID))
+	finalPath := filepath.Join(p.VideoOutputDir, fmt.Sprintf("%s_final.mp4", jobID))
+
+	// ffmpeg -y -i video.mp4 -i audio.mp3 -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 final.mp4
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-y",                   // Overwrite output
+		"-i", videoPath,        // Input 1: The video
+		"-i", audioRes.FilePath, // Input 2: The audio
+		"-c:v", "copy",         // Copy video stream without re-encoding
+		"-c:a", "aac",          // Encode audio to AAC
+		"-map", "0:v:0",        // Use video from first input
+		"-map", "1:a:0",        // Use audio from second input
+		"-shortest",            // Finish encoding when the shortest input stream ends
+		finalPath,
+	)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if setErr := db.SetJobFailed(p.DB, jobID, fmt.Sprintf("ffmpeg merge: %v", err)); setErr != nil {
+			slog.Error("failed to set job failed status", "job_id", jobID, "error", setErr)
+		}
+		return fmt.Errorf("ffmpeg execution failed: %w, output: %s", err, string(output))
+	}
+
+	/* Replace original video with final merged video for simplicity downstream */
+	if err := os.Rename(finalPath, videoPath); err != nil {
+		return fmt.Errorf("rename final video: %w", err)
+	}
+
+	/* 4. Update Database to COMPLETED */
+	// We re-use SetJobCompleted which requires a URL. For simplicity, we just pass the local file path or empty string
+	if err := db.SetJobCompleted(p.DB, jobID, videoPath); err != nil {
+		return fmt.Errorf("set job completed: %w", err)
+	}
+
+	/* 5. Enqueue Publish Task */
+	publishTask := asynq.NewTask(TypePublishVideo, t.Payload())
+	if _, err := p.Client.EnqueueContext(ctx, publishTask); err != nil {
+		return fmt.Errorf("enqueue publish task: %w", err)
+	}
+
+	slog.Info("audio successfully merged and job completed", "job_id", jobID)
+	return nil
+}

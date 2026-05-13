@@ -63,14 +63,15 @@ func CreateJob(db *sql.DB, aiProvider string) (*VideoJob, error) {
 	var promptID int64
 	var enrichedText string
 	var builderUsed string
+	var metadata sql.NullString
 
 	err = tx.QueryRow(
-		`SELECT id, enriched_text, builder_used
+		`SELECT id, enriched_text, builder_used, metadata
 		 FROM prompts
 		 WHERE status = 'UNUSED'
 		 ORDER BY id ASC
 		 LIMIT 1`,
-	).Scan(&promptID, &enrichedText, &builderUsed)
+	).Scan(&promptID, &enrichedText, &builderUsed, &metadata)
 	if err != nil {
 		return nil, err /* sql.ErrNoRows if none available */
 	}
@@ -90,9 +91,9 @@ func CreateJob(db *sql.DB, aiProvider string) (*VideoJob, error) {
 
 	if _, err := tx.Exec(
 		`INSERT INTO video_jobs
-		 (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status)
-		 VALUES (?, ?, ?, ?, ?, 'PENDING')`,
-		jobID, promptID, enrichedText, builderUsed, aiProvider,
+		 (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status, metadata)
+		 VALUES (?, ?, ?, ?, ?, 'PENDING', ?)`,
+		jobID, promptID, enrichedText, builderUsed, aiProvider, metadata,
 	); err != nil {
 		return nil, fmt.Errorf("insert job: %w", err)
 	}
@@ -109,6 +110,7 @@ func CreateJob(db *sql.DB, aiProvider string) (*VideoJob, error) {
 		PromptBuilderUsed:  builderUsed,
 		AIProvider:         aiProvider,
 		Status:             "PENDING",
+		Metadata:           metadata.String,
 	}, nil
 }
 
@@ -141,6 +143,20 @@ func SetJobCompleted(db *sql.DB, jobID string, videoURL string) error {
 		     updated_at = datetime('now'), completed_at = datetime('now')
 		 WHERE id = ?`,
 		videoURL, jobID,
+	)
+	return err
+}
+
+/*
+ * SetJobVideoReady marks a job as VIDEO_READY.
+ * This indicates the video is downloaded and ready for audio merging.
+ */
+func SetJobVideoReady(db *sql.DB, jobID string) error {
+	_, err := db.Exec(
+		`UPDATE video_jobs
+		 SET status = 'VIDEO_READY', updated_at = datetime('now')
+		 WHERE id = ?`,
+		jobID,
 	)
 	return err
 }
@@ -189,7 +205,7 @@ func SetJobFailed(db *sql.DB, jobID string, errMsg string) error {
 func GetPendingJobs(db *sql.DB, limit int) ([]VideoJob, error) {
 	rows, err := db.Query(
 		`SELECT id, prompt_id, prompt_text_snapshot, prompt_builder_used,
-		        ai_provider, status, retry_count
+		        ai_provider, status, retry_count, metadata
 		 FROM video_jobs
 		 WHERE status = 'PENDING'
 		 ORDER BY created_at ASC
@@ -235,11 +251,15 @@ func scanJobs(rows *sql.Rows) ([]VideoJob, error) {
 	var jobs []VideoJob
 	for rows.Next() {
 		var j VideoJob
+		var metadata sql.NullString
 		if err := rows.Scan(
 			&j.ID, &j.PromptID, &j.PromptTextSnapshot,
-			&j.PromptBuilderUsed, &j.AIProvider, &j.Status, &j.RetryCount,
+			&j.PromptBuilderUsed, &j.AIProvider, &j.Status, &j.RetryCount, &metadata,
 		); err != nil {
 			return nil, fmt.Errorf("scan job row: %w", err)
+		}
+		if metadata.Valid {
+			j.Metadata = metadata.String
 		}
 		jobs = append(jobs, j)
 	}
