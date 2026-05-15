@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/hereticrush/bap/internal/publisher"
 

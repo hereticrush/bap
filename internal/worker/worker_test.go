@@ -76,7 +76,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 			enriched_text TEXT,
 			status TEXT,
 			tokens_used INTEGER,
-			builder_used TEXT
+			builder_used TEXT,
+			metadata TEXT
 		);
 		CREATE TABLE video_jobs (
 			id TEXT PRIMARY KEY,
