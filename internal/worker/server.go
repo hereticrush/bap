@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/hereticrush/bap/internal/adapter/image"
 	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/publisher"
