@@ -10,7 +10,6 @@ WORKDIR /src
 
 # Cache dependency downloads
 COPY go.mod go.sum* ./
-RUN go get golang.org/x/oauth2 golang.org/x/oauth2/google google.golang.org/api/option google.golang.org/api/youtube/v3
 RUN go mod download 2>/dev/null || true
 
 # Copy source and build
