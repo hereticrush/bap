@@ -9,6 +9,7 @@ package worker
 
 /* Task type constants for the Asynq message broker. */
 const (
+	TypeGenerateImage = "video:generate_image"
 	TypeGenerateVideo = "video:generate"
 	TypePollStatus    = "video:poll"
 	TypeDownloadVideo = "video:download"
