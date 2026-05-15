@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hereticrush/bap/internal/adapter/image"
 	"github.com/hereticrush/bap/internal/adapter/prompt"
 	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
@@ -102,9 +103,12 @@ func runServe() {
 	elevenlabsKey := os.Getenv("ELEVENLABS_API_KEY")
 	ttsProvider := tts.NewElevenLabsAdapter(elevenlabsKey, "nPczCjzI2devNBz1zQ07") // default voice Brian
 
+	/* Initialize Image provider */
+	imageProvider := image.NewPollinationsAdapter()
+
 	/* Initialize Asynq scheduler and workers */
 	go func() {
-		if err := worker.RunServer(cfg.RedisURL, database, videoProvider, youtubePublisher, ttsProvider, filepath.Join("data", "videos")); err != nil {
+		if err := worker.RunServer(cfg.RedisURL, database, videoProvider, youtubePublisher, ttsProvider, imageProvider, filepath.Join("data", "videos")); err != nil {
 			slog.Error("asynq worker server failed", "error", err)
 			os.Exit(1)
 		}

@@ -22,7 +22,7 @@ import (
  * RunServer starts the Asynq worker server to consume background jobs.
  * This is a blocking call, it should be run in a goroutine.
  */
-func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub publisher.Publisher, ttsProv tts.TTSProvider, videoOutputDir string) error {
+func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub publisher.Publisher, ttsProv tts.TTSProvider, imgProv image.AIImageProvider, videoOutputDir string) error {
 	redisConnOpt, err := asynq.ParseRedisURI(redisURL)
 	if err != nil {
 		return fmt.Errorf("parse redis url: %w", err)
@@ -46,12 +46,14 @@ func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub 
 		Provider:       provider,
 		Publisher:      pub,
 		TTSProvider:    ttsProv,
+		ImageProvider:  imgProv,
 		Client:         asynq.NewClient(redisConnOpt),
 		VideoOutputDir: videoOutputDir,
 	}
 	defer processor.Client.Close()
 
 	mux := asynq.NewServeMux()
+	mux.HandleFunc(TypeGenerateImage, processor.HandleGenerateImageTask)
 	mux.HandleFunc(TypeGenerateVideo, processor.HandleGenerateVideoTask)
 	mux.HandleFunc(TypePollStatus, processor.HandlePollStatusTask)
 	mux.HandleFunc(TypeDownloadVideo, processor.HandleDownloadVideoTask)
