@@ -14,8 +14,8 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"hereticrush/bap/internal/db"
-	"hereticrush/bap/internal/publisher"
+	"github.com/hereticrush/bap/internal/db"
+	"github.com/hereticrush/bap/internal/publisher"
 
 	"github.com/hibiken/asynq"
 )

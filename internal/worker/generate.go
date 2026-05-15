@@ -18,7 +18,7 @@ import (
 	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/db"
-	"hereticrush/bap/internal/publisher"
+	"github.com/hereticrush/bap/internal/publisher"
 	"github.com/hibiken/asynq"
 )
 

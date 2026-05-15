@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"hereticrush/bap/internal/publisher"
+	"github.com/hereticrush/bap/internal/publisher"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
