@@ -291,6 +291,48 @@ func scanProcessingJobs(rows *sql.Rows) ([]VideoJob, error) {
 }
 
 /*
+ * GetRecentJobs fetches up to 'limit' jobs across all statuses,
+ * ordered by creation time descending (newest first).
+ * Used by the API to monitor pipeline progress.
+ */
+func GetRecentJobs(db *sql.DB, limit int) ([]VideoJob, error) {
+	rows, err := db.Query(
+		`SELECT id, prompt_id, prompt_text_snapshot, prompt_builder_used,
+		        ai_provider, status, retry_count, ai_task_id, cloud_storage_url, published_video_id,
+		        metadata, error_log, created_at, updated_at, completed_at
+		 FROM video_jobs
+		 ORDER BY created_at DESC
+		 LIMIT ?`,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query recent jobs: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []VideoJob
+	for rows.Next() {
+		var j VideoJob
+		var metadata, aiTaskID, cloudURL, pubID, errLog, compAt sql.NullString
+		if err := rows.Scan(
+			&j.ID, &j.PromptID, &j.PromptTextSnapshot, &j.PromptBuilderUsed,
+			&j.AIProvider, &j.Status, &j.RetryCount, &aiTaskID, &cloudURL, &pubID,
+			&metadata, &errLog, &j.CreatedAt, &j.UpdatedAt, &compAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan recent job row: %w", err)
+		}
+		if metadata.Valid { j.Metadata = metadata.String }
+		if aiTaskID.Valid { j.AITaskID = aiTaskID.String }
+		if cloudURL.Valid { j.CloudStorageURL = cloudURL.String }
+		if pubID.Valid { j.PublishedVideoID = pubID.String }
+		if errLog.Valid { j.ErrorLog = errLog.String }
+		if compAt.Valid { j.CompletedAt = compAt.String }
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
+/*
  * generateUUID produces a UUID v4 string using crypto/rand.
  * Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
  * No external dependency required.

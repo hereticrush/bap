@@ -3,6 +3,7 @@ bap
 
 # Environment secrets (NEVER commit these)
 .env
+credentials/
 
 # SQLite database files (generated at runtime)
 *.db

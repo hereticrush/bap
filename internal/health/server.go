@@ -71,6 +71,7 @@ func New(port int, database *sql.DB) *Server {
 	}
 
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/api/jobs", s.handleListJobs)
 
 	return s
 }
@@ -156,4 +157,23 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+/*
+ * handleListJobs returns the most recent 50 video jobs from the pipeline.
+ */
+func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	jobs, err := db.GetRecentJobs(s.database, 50)
+	if err != nil {
+		slog.Error("api/jobs: failed to fetch recent jobs", "error", err)
+		writeDegraded(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jobs)
 }

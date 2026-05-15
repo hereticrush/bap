@@ -16,7 +16,7 @@ services:
       - "127.0.0.1:8081:8081"    # /healthz — localhost only
     volumes:
       - ./data:/app/data                          # SQLite database persistence
-      - ./youtube_token.json:/app/youtube_token.json:ro  # YouTube OAuth token
+      - ./credentials:/app/credentials:ro         # Credentials (YouTube etc)
     depends_on:
       - redis
 
