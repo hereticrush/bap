@@ -18,16 +18,35 @@ import (
 )
 
 /*
+ * clientCredentials holds the fields we need from a Google OAuth JSON file.
+ */
+type clientCredentials struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+}
+
+/*
  * clientSecretFile represents the JSON structure exported from the
- * Google Cloud Console for a Desktop-type OAuth 2.0 Client ID.
+ * Google Cloud Console. Supports both Desktop ("installed") and
+ * Web Application ("web") OAuth 2.0 Client ID types.
  */
 type clientSecretFile struct {
-	Installed struct {
-		ClientID     string `json:"client_id"`
-		ClientSecret string `json:"client_secret"`
-		AuthURI      string `json:"auth_uri"`
-		TokenURI     string `json:"token_uri"`
-	} `json:"installed"`
+	Installed *clientCredentials `json:"installed"`
+	Web       *clientCredentials `json:"web"`
+}
+
+/*
+ * credentials returns whichever credential block is present,
+ * preferring "installed" (Desktop) over "web".
+ */
+func (c *clientSecretFile) credentials() *clientCredentials {
+	if c.Installed != nil && c.Installed.ClientID != "" {
+		return c.Installed
+	}
+	if c.Web != nil && c.Web.ClientID != "" {
+		return c.Web
+	}
+	return nil
 }
 
 /*
@@ -51,8 +70,9 @@ func RunAuthFlow(clientSecretPath, tokenPath string) error {
 		return fmt.Errorf("unable to parse client secret JSON: %w", err)
 	}
 
-	if secret.Installed.ClientID == "" || secret.Installed.ClientSecret == "" {
-		return fmt.Errorf("client_secret.json is missing client_id or client_secret under the 'installed' key")
+	creds := secret.credentials()
+	if creds == nil {
+		return fmt.Errorf("client_secret.json must contain an 'installed' or 'web' key with client_id and client_secret")
 	}
 
 	/*
@@ -61,8 +81,8 @@ func RunAuthFlow(clientSecretPath, tokenPath string) error {
 	 * code on screen so the user can copy-paste it into the terminal.
 	 */
 	config := &oauth2.Config{
-		ClientID:     secret.Installed.ClientID,
-		ClientSecret: secret.Installed.ClientSecret,
+		ClientID:     creds.ClientID,
+		ClientSecret: creds.ClientSecret,
 		RedirectURL:  "urn:ietf:wg:oauth:2.0:oob",
 		Scopes:       []string{youtube.YoutubeUploadScope},
 		Endpoint:     google.Endpoint,
