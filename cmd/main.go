@@ -34,6 +34,19 @@ import (
 	"github.com/hereticrush/bap/internal/worker"
 )
 
+/*
+ * Version information injected at build time via ldflags.
+ * Populated by: make build
+ *
+ * Example:
+ *   go build -ldflags "-X main.version=v1.0.0 -X main.commit=abc1234 -X main.date=2026-01-01"
+ */
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -45,6 +58,10 @@ func main() {
 		runServe()
 	case "build-prompts":
 		runBuildPrompts()
+	case "auth-youtube":
+		runAuthYoutube()
+	case "version":
+		runVersion()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", os.Args[1])
 		printUsage()
@@ -260,4 +277,46 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  serve            Start the pipeline scheduler, workers, and health server")
 	fmt.Fprintln(os.Stderr, "  build-prompts    Atomically enrich seed prompts via LLM (requires <seeds.json>)")
+	fmt.Fprintln(os.Stderr, "  auth-youtube     Interactive OAuth web flow to generate YouTube token.json")
+	fmt.Fprintln(os.Stderr, "  version          Print build version information")
+}
+
+/*
+ * runAuthYoutube initiates the OAuth2 web flow for YouTube.
+ * It expects credentials/youtube/client_secret.json to exist.
+ */
+func runAuthYoutube() {
+	clientSecretPath := filepath.Join("credentials", "youtube", "client_secret.json")
+	tokenPath := filepath.Join("credentials", "youtube", "token.json")
+
+	// Ensure the directories exist
+	if err := os.MkdirAll(filepath.Dir(clientSecretPath), 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	if _, err := os.Stat(clientSecretPath); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Error: %s does not exist.\n", clientSecretPath)
+		fmt.Fprintln(os.Stderr, "Please download the OAuth 2.0 Client ID (Desktop app) from Google Cloud Console and place it there.")
+		os.Exit(1)
+	}
+
+	fmt.Println("Starting YouTube OAuth2 web flow...")
+	if err := youtube.RunAuthFlow(clientSecretPath, tokenPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("\nAuthentication successful! token.json has been saved.")
+	fmt.Println("The 'serve' command can now publish videos to YouTube.")
+}
+
+/*
+ * runVersion prints the build version information injected
+ * via ldflags at compile time.
+ *
+ * Usage: bap version
+ */
+func runVersion() {
+	fmt.Printf("bap %s (commit: %s, built: %s)\n", version, commit, date)
 }
