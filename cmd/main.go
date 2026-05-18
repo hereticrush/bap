@@ -10,19 +10,6 @@
  */
 package main
 
-/*
- * Version information injected at build time via ldflags.
- * Populated by: make build
- *
- * Example:
- *   go build -ldflags "-X main.version=v1.0.0 -X main.commit=abc1234 -X main.date=2026-01-01"
- */
-var (
-	version = "dev"
-	commit  = "unknown"
-	date    = "unknown"
-)
-
 import (
 	"context"
 	"encoding/json"
@@ -45,6 +32,19 @@ import (
 	"github.com/hereticrush/bap/internal/db"
 	"github.com/hereticrush/bap/internal/health"
 	"github.com/hereticrush/bap/internal/worker"
+)
+
+/*
+ * Version information injected at build time via ldflags.
+ * Populated by: make build
+ *
+ * Example:
+ *   go build -ldflags "-X main.version=v1.0.0 -X main.commit=abc1234 -X main.date=2026-01-01"
+ */
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
 )
 
 func main() {
