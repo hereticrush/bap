@@ -110,6 +110,11 @@ func RunAuthFlow(clientSecretPath, tokenPath string) error {
 	/* Start a temporary HTTP server to receive the OAuth callback */
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		/* Ignore favicon.ico and other browser noise */
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			http.Error(w, "No authorization code received.", http.StatusBadRequest)
