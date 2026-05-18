@@ -1,0 +1,25 @@
+# ──────────────────────────────────────────────
+# bap — golangci-lint configuration
+#
+# Docs: https://golangci-lint.run/usage/configuration/
+# ──────────────────────────────────────────────
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck       # Check for unchecked errors
+    - govet          # Reports suspicious constructs (shadow, printf args, etc.)
+    - staticcheck    # Advanced static analysis (SA*, S*, ST*, QF* rules)
+    - unused         # Find unused code
+    - gosimple       # Suggest simpler code constructs
+    - ineffassign    # Detect ineffectual assignments
+    - typecheck      # Type-checking (catches compilation errors early)
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+
+issues:
+  exclude-use-default: true

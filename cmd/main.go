@@ -10,6 +10,19 @@
  */
 package main
 
+/*
+ * Version information injected at build time via ldflags.
+ * Populated by: make build
+ *
+ * Example:
+ *   go build -ldflags "-X main.version=v1.0.0 -X main.commit=abc1234 -X main.date=2026-01-01"
+ */
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
 import (
 	"context"
 	"encoding/json"
@@ -47,6 +60,8 @@ func main() {
 		runBuildPrompts()
 	case "auth-youtube":
 		runAuthYoutube()
+	case "version":
+		runVersion()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", os.Args[1])
 		printUsage()
@@ -263,6 +278,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  serve            Start the pipeline scheduler, workers, and health server")
 	fmt.Fprintln(os.Stderr, "  build-prompts    Atomically enrich seed prompts via LLM (requires <seeds.json>)")
 	fmt.Fprintln(os.Stderr, "  auth-youtube     Interactive OAuth web flow to generate YouTube token.json")
+	fmt.Fprintln(os.Stderr, "  version          Print build version information")
 }
 
 /*
@@ -293,4 +309,14 @@ func runAuthYoutube() {
 
 	fmt.Println("\nAuthentication successful! token.json has been saved.")
 	fmt.Println("The 'serve' command can now publish videos to YouTube.")
+}
+
+/*
+ * runVersion prints the build version information injected
+ * via ldflags at compile time.
+ *
+ * Usage: bap version
+ */
+func runVersion() {
+	fmt.Printf("bap %s (commit: %s, built: %s)\n", version, commit, date)
 }

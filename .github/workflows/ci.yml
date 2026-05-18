@@ -1,0 +1,75 @@
+# ──────────────────────────────────────────────
+# bap — GitHub Actions CI
+#
+# Triggers: push to main, all pull requests against main
+# Jobs:     lint → test → build (sequential gates)
+#
+# Copyright (C) 2026 hereticrush — Licensed under GPL-3.0
+# ──────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install CGO dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run tests
+        run: CGO_ENABLED=1 go test -v -race ./...
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install CGO dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Verify build
+        run: make build
+
+      - name: Print version
+        run: ./bap version
