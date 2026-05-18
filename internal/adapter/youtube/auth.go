@@ -3,6 +3,9 @@
  *
  * Implements the OAuth2 interactive web flow for generating a token.json
  * file from a client_secret.json file.
+ *
+ * Uses a localhost loopback redirect (http://localhost:8085) to capture
+ * the authorization code automatically — no manual copy-paste needed.
  */
 package youtube
 
@@ -10,12 +13,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/youtube/v3"
 )
+
+/* Port used for the temporary OAuth callback server */
+const oauthCallbackPort = "8085"
 
 /*
  * clientCredentials holds the fields we need from a Google OAuth JSON file.
@@ -51,12 +58,20 @@ func (c *clientSecretFile) credentials() *clientCredentials {
 
 /*
  * RunAuthFlow initiates an interactive CLI flow to obtain an OAuth token.
- * It reads the client secret, prints an authorization URL, waits for the
- * user to input the authorization code, and saves the resulting token.
  *
- * The redirect URI is hardcoded to the OOB (out-of-band) value for CLI
- * flows, which avoids the "missing redirect URL" error that occurs when
- * Google's exported JSON has an empty redirect_uris array.
+ * Flow:
+ *   1. Parse client_secret.json to extract credentials.
+ *   2. Start a temporary HTTP server on localhost:8085.
+ *   3. Print the Google consent URL for the user to open.
+ *   4. Wait for Google to redirect back with the authorization code.
+ *   5. Exchange the code for access + refresh tokens.
+ *   6. Save the token to disk and shut down the server.
+ *
+ * Prerequisites:
+ *   - For Web-type OAuth clients, http://localhost:8085 must be
+ *     registered as an Authorized Redirect URI in Google Cloud Console.
+ *   - For Desktop-type (installed) clients, localhost redirects are
+ *     automatically allowed by Google.
  */
 func RunAuthFlow(clientSecretPath, tokenPath string) error {
 	b, err := os.ReadFile(clientSecretPath)
@@ -76,30 +91,62 @@ func RunAuthFlow(clientSecretPath, tokenPath string) error {
 	}
 
 	/*
-	 * Build the OAuth2 config manually with an explicit redirect URI.
-	 * "urn:ietf:wg:oauth:2.0:oob" tells Google to display the auth
-	 * code on screen so the user can copy-paste it into the terminal.
+	 * Build the OAuth2 config with a localhost loopback redirect.
+	 * This replaces the deprecated urn:ietf:wg:oauth:2.0:oob flow.
 	 */
+	redirectURL := "http://localhost:" + oauthCallbackPort
 	config := &oauth2.Config{
 		ClientID:     creds.ClientID,
 		ClientSecret: creds.ClientSecret,
-		RedirectURL:  "urn:ietf:wg:oauth:2.0:oob",
+		RedirectURL:  redirectURL,
 		Scopes:       []string{youtube.YoutubeUploadScope},
 		Endpoint:     google.Endpoint,
 	}
 
-	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Go to the following link in your browser then type the authorization code: \n%v\n", authURL)
+	/* Channels to communicate between the callback server and main flow */
+	codeCh := make(chan string, 1)
+	errCh := make(chan error, 1)
 
-	fmt.Print("Enter authorization code: ")
+	/* Start a temporary HTTP server to receive the OAuth callback */
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			http.Error(w, "No authorization code received.", http.StatusBadRequest)
+			errCh <- fmt.Errorf("callback received but no authorization code was present")
+			return
+		}
+		fmt.Fprintln(w, "Authorization successful! You can close this tab and return to the terminal.")
+		codeCh <- code
+	})
+
+	srv := &http.Server{Addr: ":" + oauthCallbackPort, Handler: mux}
+	go func() {
+		if srvErr := srv.ListenAndServe(); srvErr != nil && srvErr != http.ErrServerClosed {
+			errCh <- fmt.Errorf("callback server failed to start on port %s: %w", oauthCallbackPort, srvErr)
+		}
+	}()
+
+	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	fmt.Printf("\nOpen this URL in your browser to authorize:\n\n  %s\n\n", authURL)
+	fmt.Printf("Listening for callback on %s ...\n", redirectURL)
+
+	/* Block until we receive the code or an error */
 	var authCode string
-	if _, err := fmt.Scan(&authCode); err != nil {
-		return fmt.Errorf("unable to read authorization code: %w", err)
+	select {
+	case authCode = <-codeCh:
+		/* success — code received */
+	case cbErr := <-errCh:
+		_ = srv.Shutdown(context.Background())
+		return cbErr
 	}
+
+	/* Shut down the callback server immediately */
+	_ = srv.Shutdown(context.Background())
 
 	tok, err := config.Exchange(context.TODO(), authCode)
 	if err != nil {
-		return fmt.Errorf("unable to retrieve token from web: %w", err)
+		return fmt.Errorf("unable to exchange authorization code for token: %w", err)
 	}
 
 	return saveToken(tokenPath, tok)
@@ -122,4 +169,5 @@ func saveToken(path string, token *oauth2.Token) error {
 
 	return nil
 }
+
 
