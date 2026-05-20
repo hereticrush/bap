@@ -61,11 +61,14 @@ docker-compose up -d --build
 
 The system is now fully autonomous! Every **6 hours**, the built-in Asynq scheduler will wake up and trigger the production pipeline:
 
-1. **Image Anchor Generation**: The system claims one `UNUSED` prompt from the database and calls Pollinations.ai to generate a stunning reference image.
-2. **Video Generation**: The text prompt and the generated image anchor are sent to Runway Gen-3 to generate the video.
-3. **Polling & Downloading**: The system checks Runway's status periodically. Once complete, it downloads the raw `.mp4` to `data/videos/`.
-4. **Voiceover & Mixing**: The system calls ElevenLabs using the per-seed `voice_script` in metadata when present (otherwise it falls back to the enriched prompt text), then uses `ffmpeg` to merge the audio track with the video.
-5. **Publishing**: The final, complete video is securely uploaded to your YouTube channel as a Private video, using the generated prompt as the video description.
+1. **Pipeline start** (`video:start_pipeline`, every 6 hours): Claims one `UNUSED` prompt and creates a job.
+2. **Image anchors (optional)**: When enabled for that seed (`use_image_anchor` in metadata, or `ENABLE_IMAGE_ANCHORS` when omitted), Pollinations.ai generates a local PNG, then Runway **ephemeral upload** stores a `runway://` URI in `metadata.image_anchors` (local path kept in `metadata.image_anchors_local`).
+3. **Video Generation**: Runway receives the enriched prompt and, when anchors are enabled, the `runway://` image reference—not a VPS file path.
+4. **Polling & Downloading**: The system checks Runway's status periodically. Once complete, it downloads the raw `.mp4` to `data/videos/`.
+5. **Voiceover & Mixing**: ElevenLabs uses per-seed `voice_script` when present (otherwise the enriched prompt), then `ffmpeg` merges audio with video.
+6. **Publishing**: The finished video uploads to YouTube as Private; description uses the enriched prompt.
+
+Per-seed metadata keys (string values): `voice_script`, `use_image_anchor` (`"true"` / `"false"`). Ephemeral upload requires Runway API credits.
 
 ## Observability
 
@@ -73,4 +76,4 @@ You can monitor the live queue and see what the pipeline is currently working on
 ```bash
 curl http://localhost:8081/api/jobs
 ```
-This returns a JSON array of recent jobs, showing their current status (`PENDING`, `IMAGE_READY`, `PROCESSING`, `COMPLETED`, `VIDEO_READY`, `PUBLISHED`, or `FAILED`), metadata (including `voice_script` and `local_video_path`), and any error logs. The `cloud_storage_url` field holds the provider download URL only.
+This returns a JSON array of recent jobs, showing their current status (`PENDING`, `IMAGE_READY`, `PROCESSING`, `COMPLETED`, `VIDEO_READY`, `PUBLISHED`, or `FAILED`), metadata (`voice_script`, `image_anchors`, `image_anchors_local`, `local_video_path`), and any error logs. The `cloud_storage_url` field holds the provider download URL only.

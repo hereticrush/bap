@@ -51,6 +51,9 @@ type Config struct {
 	/* ElevenLabs TTS */
 	ElevenLabsAPIKey  string
 	ElevenLabsVoiceID string
+
+	/* Pipeline: default when seed metadata omits use_image_anchor */
+	EnableImageAnchors bool
 }
 
 /*
@@ -111,6 +114,14 @@ func Load() (*Config, error) {
 
 	/* --- Database --- */
 	cfg.DBPath = withDefault("DB_PATH", "./data/bap.db")
+
+	/* --- Pipeline --- */
+	enableAnchorsStr := withDefault("ENABLE_IMAGE_ANCHORS", "true")
+	enableAnchors, err := strconv.ParseBool(enableAnchorsStr)
+	if err != nil {
+		return nil, fmt.Errorf("ENABLE_IMAGE_ANCHORS must be true or false: %w", err)
+	}
+	cfg.EnableImageAnchors = enableAnchors
 
 	/* --- Health Server --- */
 	portStr := withDefault("HEALTH_PORT", "8081")

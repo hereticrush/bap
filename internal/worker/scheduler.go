@@ -39,10 +39,10 @@ func RunScheduler(redisURL string) error {
 		return fmt.Errorf("register poll task: %w", err)
 	}
 
-	/* 2. Generate new images and videos every 6 hours (0, 6, 12, 18) */
-	genTask := asynq.NewTask(TypeGenerateImage, nil)
-	if _, err := scheduler.Register("0 */6 * * *", genTask); err != nil {
-		return fmt.Errorf("register generate task: %w", err)
+	/* 2. Start the video pipeline every 6 hours (0, 6, 12, 18) */
+	startTask := asynq.NewTask(TypeStartPipeline, nil)
+	if _, err := scheduler.Register("0 */6 * * *", startTask); err != nil {
+		return fmt.Errorf("register start pipeline task: %w", err)
 	}
 
 	slog.Info("starting asynq scheduler")

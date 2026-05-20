@@ -23,7 +23,7 @@ import (
  * RunServer starts the Asynq worker server to consume background jobs.
  * This is a blocking call, it should be run in a goroutine.
  */
-func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub publisher.Publisher, ttsProv tts.TTSProvider, imgProv image.AIImageProvider, videoOutputDir string) error {
+func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub publisher.Publisher, ttsProv tts.TTSProvider, imgProv image.AIImageProvider, uploader video.AssetUploader, defaultImageAnchors bool, videoOutputDir string) error {
 	redisConnOpt, err := asynq.ParseRedisURI(redisURL)
 	if err != nil {
 		return fmt.Errorf("parse redis url: %w", err)
@@ -43,18 +43,20 @@ func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub 
 	)
 
 	processor := &VideoProcessor{
-		DB:             db,
-		Provider:       provider,
-		Publisher:      pub,
-		TTSProvider:    ttsProv,
-		ImageProvider:  imgProv,
-		Client:         asynq.NewClient(redisConnOpt),
-		VideoOutputDir: videoOutputDir,
+		DB:                  db,
+		Provider:            provider,
+		Publisher:           pub,
+		TTSProvider:         ttsProv,
+		ImageProvider:       imgProv,
+		Uploader:            uploader,
+		DefaultImageAnchors: defaultImageAnchors,
+		Client:              asynq.NewClient(redisConnOpt),
+		VideoOutputDir:      videoOutputDir,
 	}
 	defer processor.Client.Close()
 
 	mux := asynq.NewServeMux()
-	mux.HandleFunc(TypeGenerateImage, processor.HandleGenerateImageTask)
+	mux.HandleFunc(TypeStartPipeline, processor.HandleStartPipelineTask)
 	mux.HandleFunc(TypeGenerateVideo, processor.HandleGenerateVideoTask)
 	mux.HandleFunc(TypePollStatus, processor.HandlePollStatusTask)
 	mux.HandleFunc(TypeDownloadVideo, processor.HandleDownloadVideoTask)

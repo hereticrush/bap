@@ -99,6 +99,30 @@ func TestCreateJobCopiesPromptMetadata(t *testing.T) {
 	}
 }
 
+func TestUseImageAnchor(t *testing.T) {
+	if !UseImageAnchor(`{"use_image_anchor":"true"}`, false) {
+		t.Error("expected true from seed override")
+	}
+	if UseImageAnchor(`{"use_image_anchor":"false"}`, true) {
+		t.Error("expected false from seed override")
+	}
+	if !UseImageAnchor("", true) {
+		t.Error("expected default when unset")
+	}
+	if !UseImageAnchor(`{"voice_script":"x"}`, true) {
+		t.Error("expected default when key absent")
+	}
+}
+
+func TestIsProviderImageRef(t *testing.T) {
+	if !IsProviderImageRef("runway://x") || !IsProviderImageRef("https://a/b.png") {
+		t.Error("expected provider refs accepted")
+	}
+	if IsProviderImageRef("data/images/job.png") || IsProviderImageRef("/app/data/x.png") {
+		t.Error("expected local paths rejected")
+	}
+}
+
 func TestMarkJobCompletedAfterAudioPreservesURL(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()

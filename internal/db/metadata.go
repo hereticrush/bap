@@ -9,12 +9,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 const (
-	MetadataKeyVoiceScript    = "voice_script"
-	MetadataKeyLocalVideoPath = "local_video_path"
-	MetadataKeyImageAnchors   = "image_anchors"
+	MetadataKeyVoiceScript       = "voice_script"
+	MetadataKeyLocalVideoPath    = "local_video_path"
+	MetadataKeyImageAnchors      = "image_anchors"
+	MetadataKeyImageAnchorsLocal = "image_anchors_local"
+	MetadataKeyUseImageAnchor    = "use_image_anchor"
 )
 
 /*
@@ -76,6 +79,43 @@ func MergeJobMetadata(db *sql.DB, jobID string, patch map[string]interface{}) er
 		metaJSON, jobID,
 	)
 	return err
+}
+
+/*
+ * UseImageAnchor returns whether this job should generate and upload an image
+ * anchor. Per-seed metadata use_image_anchor ("true"/"false") overrides
+ * defaultWhenUnset when present.
+ */
+func UseImageAnchor(metadataJSON string, defaultWhenUnset bool) bool {
+	if metadataJSON == "" {
+		return defaultWhenUnset
+	}
+	var meta map[string]string
+	if err := json.Unmarshal([]byte(metadataJSON), &meta); err != nil {
+		return defaultWhenUnset
+	}
+	v, ok := meta[MetadataKeyUseImageAnchor]
+	if !ok {
+		return defaultWhenUnset
+	}
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "1", "yes":
+		return true
+	case "false", "0", "no":
+		return false
+	default:
+		return defaultWhenUnset
+	}
+}
+
+/*
+ * IsProviderImageRef reports whether s is a value Runway can fetch (not a local path).
+ */
+func IsProviderImageRef(s string) bool {
+	return strings.HasPrefix(s, "runway://") ||
+		strings.HasPrefix(s, "https://") ||
+		strings.HasPrefix(s, "http://") ||
+		strings.HasPrefix(s, "data:")
 }
 
 /*

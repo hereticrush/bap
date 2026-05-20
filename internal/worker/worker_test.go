@@ -131,8 +131,12 @@ func TestHandleGenerateVideoTask(t *testing.T) {
 		VideoOutputDir: "data/videos",
 	}
 
+	/* Seed a job for generate handler */
+	database.Exec(`INSERT INTO video_jobs (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status)
+		VALUES ('job_vid', 1, 'prompt text', 'TEST', 'MOCK', 'PENDING')`)
+
 	/* 4. Execute the handler directly */
-	task := asynq.NewTask(TypeGenerateVideo, nil)
+	task := asynq.NewTask(TypeGenerateVideo, []byte(`{"job_id":"job_vid"}`))
 	err := processor.HandleGenerateVideoTask(context.Background(), task)
 	if err != nil {
 		t.Fatalf("HandleGenerateVideoTask failed: %v", err)
@@ -145,9 +149,43 @@ func TestHandleGenerateVideoTask(t *testing.T) {
 
 	/* 6. Verify the DB state advanced to PROCESSING */
 	var status string
-	db.QueryRow("SELECT status FROM video_jobs LIMIT 1").Scan(&status)
+	db.QueryRow("SELECT status FROM video_jobs WHERE id = 'job_vid'").Scan(&status)
 	if status != "PROCESSING" {
 		t.Errorf("expected job status PROCESSING, got %q", status)
+	}
+}
+
+func TestHandleGenerateVideoTask_RejectsLocalAnchor(t *testing.T) {
+	mr := miniredis.RunT(t)
+	database := setupTestDB(t)
+	defer database.Close()
+
+	database.Exec("INSERT INTO prompts (id, seed_text, enriched_text, status, builder_used) VALUES (1, 'a', 'b', 'USED', 'TEST')")
+	database.Exec(`INSERT INTO video_jobs (id, prompt_id, prompt_text_snapshot, ai_provider, status, metadata)
+		VALUES ('job_local', 1, 'p', 'MOCK', 'PENDING', '{"image_anchors":["data/images/job.png"]}')`)
+
+	client := asynq.NewClient(asynq.RedisClientOpt{Addr: mr.Addr()})
+	defer client.Close()
+
+	provider := &mockVideoProvider{taskIDToReturn: "t1"}
+	processor := &VideoProcessor{
+		DB:       database,
+		Provider: provider,
+		Client:   client,
+	}
+
+	err := processor.HandleGenerateVideoTask(context.Background(),
+		asynq.NewTask(TypeGenerateVideo, []byte(`{"job_id":"job_local"}`)))
+	if err == nil {
+		t.Fatal("expected error for local image anchor path")
+	}
+	if provider.generateCalled {
+		t.Error("GenerateVideo should not be called with invalid anchor")
+	}
+	var status string
+	database.QueryRow("SELECT status FROM video_jobs WHERE id = 'job_local'").Scan(&status)
+	if status != "FAILED" {
+		t.Errorf("status = %q, want FAILED", status)
 	}
 }
 

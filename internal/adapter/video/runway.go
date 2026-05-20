@@ -32,10 +32,9 @@ import (
 )
 
 /* Runway REST API base URL and required version header. */
-const (
-	runwayBaseURL    = "https://api.dev.runwayml.com/v1"
-	runwayAPIVersion = "2024-11-06"
-)
+var runwayBaseURL = "https://api.dev.runwayml.com/v1"
+
+const runwayAPIVersion = "2024-11-06"
 
 /* RunwayAdapter generates videos via the Runway REST API. */
 type RunwayAdapter struct {
