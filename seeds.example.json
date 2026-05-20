@@ -1,9 +1,21 @@
 {
+  "system_prompt": "You are an expert cinematic video director. Expand each seed into a dense, highly descriptive prompt optimized for AI video generation.",
   "target_provider": "RUNWAY",
   "seeds": [
-    "A photorealistic close-up of a futuristic cyber-samurai meditating in the neon rain.",
-    "A sweeping drone shot over a massive steampunk canyon city filled with airships.",
-    "A slow motion shot of an astronaut floating inside a glowing alien artifact.",
-    "A vibrant, colorful coral reef where the fish look like tiny spaceships."
+    {
+      "seed_text": "A photorealistic close-up of a futuristic cyber-samurai meditating in the neon rain.",
+      "metadata": {
+        "voice_script": "In the neon rain, the samurai breathes once—and the city holds its breath."
+      }
+    },
+    {
+      "seed_text": "A sweeping drone shot over a massive steampunk canyon city filled with airships."
+    },
+    {
+      "seed_text": "A slow motion shot of an astronaut floating inside a glowing alien artifact."
+    },
+    {
+      "seed_text": "A vibrant, colorful coral reef where the fish look like tiny spaceships."
+    }
   ]
 }

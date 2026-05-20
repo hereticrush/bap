@@ -74,7 +74,12 @@ func (p *VideoProcessor) HandleDownloadVideoTask(ctx context.Context, t *asynq.T
 		return fmt.Errorf("copy stream: %w", err)
 	}
 
-	/* Update Database to VIDEO_READY */
+	/* Update Database to VIDEO_READY and record local file path in metadata */
+	if err := db.MergeJobMetadata(p.DB, payload.JobID, map[string]interface{}{
+		db.MetadataKeyLocalVideoPath: filePath,
+	}); err != nil {
+		return fmt.Errorf("update job metadata: %w", err)
+	}
 	if err := db.SetJobVideoReady(p.DB, payload.JobID); err != nil {
 		return fmt.Errorf("set job video ready: %w", err)
 	}

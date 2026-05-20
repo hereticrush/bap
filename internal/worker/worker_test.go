@@ -54,11 +54,13 @@ func (m *mockPublisher) Publish(ctx context.Context, req publisher.PublishReques
 type mockTTSProvider struct {
 	resultToReturn tts.AudioResult
 	generateCalled bool
+	lastText       string
 }
 
 func (m *mockTTSProvider) Name() string { return "MOCK_TTS" }
 func (m *mockTTSProvider) GenerateAudio(ctx context.Context, text string, outputFilename string) (tts.AudioResult, error) {
 	m.generateCalled = true
+	m.lastText = text
 	return m.resultToReturn, nil
 }
 
@@ -197,9 +199,10 @@ func TestHandleAddAudioTask(t *testing.T) {
 	client := asynq.NewClient(asynq.RedisClientOpt{Addr: mr.Addr()})
 	defer client.Close()
 
-	/* Seed a VIDEO_READY job */
+	/* Seed a VIDEO_READY job with voice_script in metadata */
 	db.Exec("INSERT INTO prompts (id, seed_text, enriched_text, status, builder_used) VALUES (1, 'a', 'b', 'USED', 'TEST')")
-	db.Exec("INSERT INTO video_jobs (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status, cloud_storage_url) VALUES ('job_1', 1, 'mock prompt', 'TEST', 'RUNWAY', 'VIDEO_READY', 'http://url')")
+	db.Exec(`INSERT INTO video_jobs (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status, cloud_storage_url, metadata)
+		VALUES ('job_1', 1, 'long cinematic prompt text', 'TEST', 'RUNWAY', 'VIDEO_READY', 'https://provider.example/v.mp4', '{"voice_script":"short narration"}')`)
 
 	ttsProv := &mockTTSProvider{
 		resultToReturn: tts.AudioResult{FilePath: "data/audio/job_1.mp3"},
@@ -221,10 +224,14 @@ func TestHandleAddAudioTask(t *testing.T) {
 	task := asynq.NewTask(TypeAddAudio, []byte(`{"job_id":"job_1"}`))
 	err := processor.HandleAddAudioTask(context.Background(), task)
 	
-	/* It will fail because the mock mp3 and mp4 don't exist for ffmpeg to merge, but we can assert tts was called */
 	if !ttsProv.generateCalled {
-		t.Error("expected GenerateAudio to be called")
+		t.Fatal("expected GenerateAudio to be called")
 	}
+	if ttsProv.lastText != "short narration" {
+		t.Errorf("expected voice_script for TTS, got %q", ttsProv.lastText)
+	}
+
+	/* It will fail because the mock mp3 and mp4 don't exist for ffmpeg to merge */
 
 	/* Since it fails at ffmpeg, job state should become FAILED */
 	var status string

@@ -11,6 +11,7 @@ package worker
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -34,11 +35,19 @@ func (p *VideoProcessor) HandleAddAudioTask(ctx context.Context, t *asynq.Task) 
 	jobID := payload.JobID
 	slog.Info("processing add audio task", "job_id", jobID)
 
-	/* 1. Fetch the job to get the text */
-	var textToRead string
-	err := p.DB.QueryRow("SELECT prompt_text_snapshot FROM video_jobs WHERE id = ?", jobID).Scan(&textToRead)
+	/* 1. Fetch prompt snapshot and metadata for TTS text */
+	var promptSnapshot string
+	var metadataJSON sql.NullString
+	err := p.DB.QueryRow(
+		"SELECT prompt_text_snapshot, metadata FROM video_jobs WHERE id = ?", jobID,
+	).Scan(&promptSnapshot, &metadataJSON)
 	if err != nil {
-		return fmt.Errorf("fetch job text: %w", err)
+		return fmt.Errorf("fetch job: %w", err)
+	}
+
+	textToRead := db.TTSText(metadataJSON.String, promptSnapshot)
+	if textToRead == "" {
+		return fmt.Errorf("no text available for TTS (job_id=%s)", jobID)
 	}
 
 	/* 2. Generate Audio via ElevenLabs */
@@ -83,9 +92,13 @@ func (p *VideoProcessor) HandleAddAudioTask(ctx context.Context, t *asynq.Task) 
 		return fmt.Errorf("rename final video: %w", err)
 	}
 
-	/* 4. Update Database to COMPLETED */
-	// We re-use SetJobCompleted which requires a URL. For simplicity, we just pass the local file path or empty string
-	if err := db.SetJobCompleted(p.DB, jobID, videoPath); err != nil {
+	/* 4. Record local path in metadata; mark COMPLETED without overwriting provider URL */
+	if err := db.MergeJobMetadata(p.DB, jobID, map[string]interface{}{
+		db.MetadataKeyLocalVideoPath: videoPath,
+	}); err != nil {
+		return fmt.Errorf("update job metadata: %w", err)
+	}
+	if err := db.MarkJobCompletedAfterAudio(p.DB, jobID); err != nil {
 		return fmt.Errorf("set job completed: %w", err)
 	}
 

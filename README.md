@@ -12,6 +12,7 @@ Before running the pipeline, you need to provide your API keys and YouTube autho
    - `GEMINI_API_KEY`: Used to transform simple ideas into detailed, highly-descriptive video prompts.
    - `RUNWAY_API_KEY`: Used to generate the final video from the prompt and image anchor.
    - `ELEVENLABS_API_KEY`: Used to generate realistic text-to-speech voiceovers.
+   - `ELEVENLABS_VOICE_ID`: ElevenLabs voice ID for TTS (optional; a default is used if unset).
 
 2. **YouTube Credentials**: 
    - You need a Google Cloud project with the YouTube Data API v3 enabled.
@@ -31,7 +32,9 @@ The system operates on "seeds"—simple ideas that the LLM expands into rich pro
   "seeds": [
     {
       "seed_text": "A cyber-samurai standing in the neon rain.",
-      "metadata": "{\"voice_script\": \"The neon lights flickered as the samurai drew his blade.\"}"
+      "metadata": {
+        "voice_script": "The neon lights flickered as the samurai drew his blade."
+      }
     }
   ]
 }
@@ -61,7 +64,7 @@ The system is now fully autonomous! Every **6 hours**, the built-in Asynq schedu
 1. **Image Anchor Generation**: The system claims one `UNUSED` prompt from the database and calls Pollinations.ai to generate a stunning reference image.
 2. **Video Generation**: The text prompt and the generated image anchor are sent to Runway Gen-3 to generate the video.
 3. **Polling & Downloading**: The system checks Runway's status periodically. Once complete, it downloads the raw `.mp4` to `data/videos/`.
-4. **Voiceover & Mixing**: The system calls ElevenLabs using the `voice_script` metadata to generate speech, then uses `ffmpeg` to permanently merge the audio track with the video.
+4. **Voiceover & Mixing**: The system calls ElevenLabs using the per-seed `voice_script` in metadata when present (otherwise it falls back to the enriched prompt text), then uses `ffmpeg` to merge the audio track with the video.
 5. **Publishing**: The final, complete video is securely uploaded to your YouTube channel as a Private video, using the generated prompt as the video description.
 
 ## Observability
@@ -70,4 +73,4 @@ You can monitor the live queue and see what the pipeline is currently working on
 ```bash
 curl http://localhost:8081/api/jobs
 ```
-This returns a JSON array of recent jobs, showing their current status (`IMAGE_READY`, `PROCESSING`, `PUBLISHED`, or `FAILED`) and any error logs.
+This returns a JSON array of recent jobs, showing their current status (`PENDING`, `IMAGE_READY`, `PROCESSING`, `COMPLETED`, `VIDEO_READY`, `PUBLISHED`, or `FAILED`), metadata (including `voice_script` and `local_video_path`), and any error logs. The `cloud_storage_url` field holds the provider download URL only.
