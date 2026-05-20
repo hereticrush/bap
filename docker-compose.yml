@@ -14,6 +14,8 @@ services:
     stop_grace_period: 30s
     env_file: .env
     environment:
+      - ACTIVE_AI_PROVIDER=RUNWAY
+      - ACTIVE_PROMPT_BUILDER=GEMINI
       - REDIS_URL=redis://redis:6379
     ports:
       - "127.0.0.1:8081:8081"    # /healthz — localhost only
