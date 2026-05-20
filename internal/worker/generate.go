@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/hereticrush/bap/internal/adapter/image"
 	"github.com/hereticrush/bap/internal/adapter/tts"
@@ -28,13 +29,15 @@ import (
  * worker handlers to process jobs.
  */
 type VideoProcessor struct {
-	DB             *sql.DB
-	Provider       video.AIVideoProvider
-	Publisher      publisher.Publisher
-	TTSProvider    tts.TTSProvider
-	ImageProvider  image.AIImageProvider
-	Client         *asynq.Client
-	VideoOutputDir string
+	DB                  *sql.DB
+	Provider            video.AIVideoProvider
+	Publisher           publisher.Publisher
+	TTSProvider         tts.TTSProvider
+	ImageProvider       image.AIImageProvider
+	Uploader            video.AssetUploader
+	DefaultImageAnchors bool
+	Client              *asynq.Client
+	VideoOutputDir      string
 }
 
 /*
@@ -74,10 +77,28 @@ func (p *VideoProcessor) HandleGenerateVideoTask(ctx context.Context, t *asynq.T
 			ImageAnchors []string `json:"image_anchors"`
 		}
 		if err := json.Unmarshal([]byte(metadataJSON.String), &meta); err == nil {
-			req.ImageURLs = meta.ImageAnchors
+			for _, ref := range meta.ImageAnchors {
+				if ref == "" {
+					continue
+				}
+				if !db.IsProviderImageRef(ref) {
+					if setErr := db.SetJobFailed(p.DB, jobID,
+						fmt.Sprintf("image_anchors contains local path %q; re-run pipeline after deploy", ref)); setErr != nil {
+						slog.Error("failed to set job failed status", "job_id", jobID, "error", setErr)
+					}
+					return fmt.Errorf("invalid image anchor reference: %s", ref)
+				}
+				req.ImageURLs = append(req.ImageURLs, ref)
+			}
 		} else {
 			slog.Warn("failed to parse job metadata", "job_id", jobID, "error", err)
 		}
+	}
+
+	if len(req.ImageURLs) > 0 {
+		slog.Info("submitting with image anchor", "job_id", jobID, "anchor", req.ImageURLs[0])
+	} else if strings.Contains(metadataJSON.String, db.MetadataKeyImageAnchors) {
+		slog.Warn("image_anchors key present but no valid provider refs", "job_id", jobID)
 	}
 	/* 3. Submit to AI Provider */
 	taskID, err := p.Provider.GenerateVideo(ctx, req)

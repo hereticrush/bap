@@ -9,7 +9,10 @@
       }
     },
     {
-      "seed_text": "A sweeping drone shot over a massive steampunk canyon city filled with airships."
+      "seed_text": "A sweeping drone shot over a massive steampunk canyon city filled with airships.",
+      "metadata": {
+        "use_image_anchor": "false"
+      }
     },
     {
       "seed_text": "A slow motion shot of an astronaut floating inside a glowing alien artifact."

@@ -122,9 +122,17 @@ func runServe() {
 	/* Initialize Image provider */
 	imageProvider := image.NewPollinationsAdapter()
 
+	var assetUploader video.AssetUploader
+	if u, ok := videoProvider.(video.AssetUploader); ok {
+		assetUploader = u
+	}
+
 	/* Initialize Asynq scheduler and workers */
 	go func() {
-		if err := worker.RunServer(cfg.RedisURL, database, videoProvider, youtubePublisher, ttsProvider, imageProvider, filepath.Join("data", "videos")); err != nil {
+		if err := worker.RunServer(
+			cfg.RedisURL, database, videoProvider, youtubePublisher, ttsProvider,
+			imageProvider, assetUploader, cfg.EnableImageAnchors, filepath.Join("data", "videos"),
+		); err != nil {
 			slog.Error("asynq worker server failed", "error", err)
 			os.Exit(1)
 		}
