@@ -131,10 +131,11 @@ func SetJobProcessing(db *sql.DB, jobID string, aiTaskID string) error {
 }
 
 /*
- * SetJobCompleted marks a job as COMPLETED and stores the
- * video download URL from the AI provider.
+ * SetJobCompleted marks a job as COMPLETED and stores the provider's
+ * remote video URL in cloud_storage_url.
  *
  * Called after CheckStatus() returns StatusCompleted with a VideoURL.
+ * Local paths are stored in metadata.local_video_path (see MergeJobMetadata).
  */
 func SetJobCompleted(db *sql.DB, jobID string, videoURL string) error {
 	_, err := db.Exec(

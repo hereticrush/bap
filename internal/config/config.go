@@ -47,6 +47,10 @@ type Config struct {
 
 	/* Health Check Server */
 	HealthPort int
+
+	/* ElevenLabs TTS */
+	ElevenLabsAPIKey  string
+	ElevenLabsVoiceID string
 }
 
 /*
@@ -97,6 +101,10 @@ func Load() (*Config, error) {
 	/* --- YouTube --- */
 	cfg.YouTubeClientID = os.Getenv("YOUTUBE_CLIENT_ID")
 	cfg.YouTubeClientSecret = os.Getenv("YOUTUBE_CLIENT_SECRET")
+
+	/* --- ElevenLabs --- */
+	cfg.ElevenLabsAPIKey = os.Getenv("ELEVENLABS_API_KEY")
+	cfg.ElevenLabsVoiceID = withDefault("ELEVENLABS_VOICE_ID", "nPczCjzI2devNBz1zQ07")
 
 	/* --- Redis --- */
 	cfg.RedisURL = withDefault("REDIS_URL", "redis://localhost:6379")

@@ -60,7 +60,7 @@ func (p *VideoProcessor) HandleGenerateImageTask(ctx context.Context, t *asynq.T
 
 	/* 4. Update Database Metadata and Status */
 	meta := map[string]interface{}{
-		"image_anchors": []string{imagePath},
+		db.MetadataKeyImageAnchors: []string{imagePath},
 	}
 	
 	// Preserve existing metadata if any
@@ -68,7 +68,7 @@ func (p *VideoProcessor) HandleGenerateImageTask(ctx context.Context, t *asynq.T
 		var existing map[string]interface{}
 		if json.Unmarshal([]byte(job.Metadata), &existing) == nil {
 			for k, v := range existing {
-				if k != "image_anchors" {
+				if k != db.MetadataKeyImageAnchors {
 					meta[k] = v
 				}
 			}

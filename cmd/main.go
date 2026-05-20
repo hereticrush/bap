@@ -117,8 +117,7 @@ func runServe() {
 	)
 
 	/* Initialize the ElevenLabs TTS provider */
-	elevenlabsKey := os.Getenv("ELEVENLABS_API_KEY")
-	ttsProvider := tts.NewElevenLabsAdapter(elevenlabsKey, "nPczCjzI2devNBz1zQ07") // default voice Brian
+	ttsProvider := tts.NewElevenLabsAdapter(cfg.ElevenLabsAPIKey, cfg.ElevenLabsVoiceID)
 
 	/* Initialize Image provider */
 	imageProvider := image.NewPollinationsAdapter()

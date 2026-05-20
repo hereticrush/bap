@@ -17,6 +17,7 @@ import (
 	"log/slog"
 
 	"github.com/hereticrush/bap/internal/adapter/prompt"
+	"github.com/hereticrush/bap/internal/db"
 )
 
 /*
@@ -75,10 +76,15 @@ func BuildBatch(ctx context.Context, db *sql.DB, builder prompt.AIPromptBuilder,
 			return fmt.Errorf("seed #%d failed: %w", i+1, err)
 		}
 
+		metaJSON, err := db.MetadataJSON(seed.Metadata)
+		if err != nil {
+			return fmt.Errorf("marshal metadata for seed #%d: %w", i+1, err)
+		}
+
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO prompts (seed_text, enriched_text, status, tokens_used, builder_used)
-			 VALUES (?, ?, 'UNUSED', ?, ?)`,
-			seed.SeedText, result.EnrichedPrompt, result.TokensUsed, builder.Name(),
+			`INSERT INTO prompts (seed_text, enriched_text, status, tokens_used, builder_used, metadata)
+			 VALUES (?, ?, 'UNUSED', ?, ?, ?)`,
+			seed.SeedText, result.EnrichedPrompt, result.TokensUsed, builder.Name(), metaJSON,
 		); err != nil {
 			return fmt.Errorf("insert seed #%d: %w", i+1, err)
 		}

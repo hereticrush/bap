@@ -82,7 +82,7 @@ docker-deps: ## Fetch and tidy dependencies inside a Docker container
 	docker run --rm \
 	  -v "$$(pwd)":/src \
 	  -w /src \
-	  golang:1.24-alpine \
+	  golang:1.25-alpine \
 	  sh -c "apk add --no-cache gcc musl-dev > /dev/null && go mod tidy && go mod download"
 
 # ──────────────────────────────────────────────
