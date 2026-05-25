@@ -26,6 +26,7 @@ func TestHandleReconcileJobsTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 	defer db.Close()
 
 	_, err = db.Exec(`
