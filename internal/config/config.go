@@ -30,10 +30,12 @@ type Config struct {
 	GeminiMaxPerHour    int    /* Sliding-window hourly rate limit for Gemini API */
 
 	/* Cloud Storage (S3 / Cloudflare R2) */
-	S3Bucket    string
-	S3Region    string
-	S3AccessKey string
-	S3SecretKey string
+	S3Bucket         string
+	S3Region         string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3Endpoint       string
+	S3ForcePathStyle bool
 
 	/* YouTube OAuth */
 	YouTubeClientID     string
@@ -100,6 +102,14 @@ func Load() (*Config, error) {
 	cfg.S3Region = withDefault("S3_REGION", "auto")
 	cfg.S3AccessKey = os.Getenv("S3_ACCESS_KEY")
 	cfg.S3SecretKey = os.Getenv("S3_SECRET_KEY")
+	cfg.S3Endpoint = os.Getenv("S3_ENDPOINT")
+
+	s3ForcePathStyleStr := withDefault("S3_FORCE_PATH_STYLE", "false")
+	s3ForcePathStyle, err := strconv.ParseBool(s3ForcePathStyleStr)
+	if err != nil {
+		return nil, fmt.Errorf("S3_FORCE_PATH_STYLE must be true or false: %w", err)
+	}
+	cfg.S3ForcePathStyle = s3ForcePathStyle
 
 	/* --- YouTube --- */
 	cfg.YouTubeClientID = os.Getenv("YOUTUBE_CLIENT_ID")

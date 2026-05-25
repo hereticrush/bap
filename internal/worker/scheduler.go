@@ -45,6 +45,12 @@ func RunScheduler(redisURL string) error {
 		return fmt.Errorf("register start pipeline task: %w", err)
 	}
 
+	/* 3. Daily disk cleanup at 2 AM */
+	cleanupTask := asynq.NewTask(TypeDiskCleanup, nil)
+	if _, err := scheduler.Register("0 2 * * *", cleanupTask); err != nil {
+		return fmt.Errorf("register disk cleanup task: %w", err)
+	}
+
 	slog.Info("starting asynq scheduler")
 	if err := scheduler.Run(); err != nil {
 		return fmt.Errorf("run scheduler: %w", err)

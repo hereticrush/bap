@@ -74,14 +74,27 @@ func (p *VideoProcessor) HandleDownloadVideoTask(ctx context.Context, t *asynq.T
 		return fmt.Errorf("copy stream: %w", err)
 	}
 
+	/* Upload downloaded video to cloud storage */
+	slog.Info("uploading raw video to cloud storage", "job_id", payload.JobID, "file", filePath)
+	s3URL, err := p.StorageProvider.UploadFile(ctx, filePath, "video/mp4")
+	if err != nil {
+		slog.Error("failed to upload raw video to cloud storage", "job_id", payload.JobID, "error", err)
+		return fmt.Errorf("upload raw video: %w", err)
+	}
+
 	/* Update Database to VIDEO_READY and record local file path in metadata */
 	if err := db.MergeJobMetadata(p.DB, payload.JobID, map[string]interface{}{
 		db.MetadataKeyLocalVideoPath: filePath,
 	}); err != nil {
 		return fmt.Errorf("update job metadata: %w", err)
 	}
-	if err := db.SetJobVideoReady(p.DB, payload.JobID); err != nil {
-		return fmt.Errorf("set job video ready: %w", err)
+
+	_, err = p.DB.ExecContext(ctx,
+		`UPDATE video_jobs SET cloud_storage_url = ?, status = 'VIDEO_READY', updated_at = datetime('now') WHERE id = ?`,
+		s3URL, payload.JobID,
+	)
+	if err != nil {
+		return fmt.Errorf("set job video ready and URL: %w", err)
 	}
 
 	/* Enqueue Add Audio Task */
@@ -90,6 +103,6 @@ func (p *VideoProcessor) HandleDownloadVideoTask(ctx context.Context, t *asynq.T
 		return fmt.Errorf("enqueue add audio task: %w", err)
 	}
 
-	slog.Info("video download complete, enqueued audio task", "job_id", payload.JobID, "file", filePath)
+	slog.Info("video download and upload complete, enqueued audio task", "job_id", payload.JobID, "file", filePath, "s3_url", s3URL)
 	return nil
 }

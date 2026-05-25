@@ -24,6 +24,7 @@ import (
 
 	"github.com/hereticrush/bap/internal/adapter/image"
 	"github.com/hereticrush/bap/internal/adapter/prompt"
+	"github.com/hereticrush/bap/internal/adapter/storage"
 	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/adapter/youtube"
@@ -127,11 +128,26 @@ func runServe() {
 		assetUploader = u
 	}
 
+	/* Initialize Storage Provider (S3 with Stub fallback) */
+	var storageProvider storage.StorageProvider
+	if cfg.S3Bucket != "" {
+		slog.Info("initializing S3 cloud storage provider", "bucket", cfg.S3Bucket, "region", cfg.S3Region, "endpoint", cfg.S3Endpoint)
+		s3Prov, err := storage.NewS3StorageProvider(cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Endpoint, cfg.S3ForcePathStyle)
+		if err != nil {
+			slog.Error("failed to initialize S3 storage provider", "error", err)
+			os.Exit(1)
+		}
+		storageProvider = s3Prov
+	} else {
+		slog.Warn("S3_BUCKET is not set; falling back to StubStorageProvider (local only)")
+		storageProvider = storage.NewStubStorageProvider()
+	}
+
 	/* Initialize Asynq scheduler and workers */
 	go func() {
 		if err := worker.RunServer(
 			cfg.RedisURL, database, videoProvider, youtubePublisher, ttsProvider,
-			imageProvider, assetUploader, cfg.EnableImageAnchors, filepath.Join("data", "videos"),
+			imageProvider, assetUploader, storageProvider, cfg.EnableImageAnchors, filepath.Join("data", "videos"),
 		); err != nil {
 			slog.Error("asynq worker server failed", "error", err)
 			os.Exit(1)

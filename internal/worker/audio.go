@@ -92,14 +92,29 @@ func (p *VideoProcessor) HandleAddAudioTask(ctx context.Context, t *asynq.Task) 
 		return fmt.Errorf("rename final video: %w", err)
 	}
 
-	/* 4. Record local path in metadata; mark COMPLETED without overwriting provider URL */
+	/* Upload final merged video to cloud storage */
+	slog.Info("uploading final merged video to cloud storage", "job_id", jobID, "file", videoPath)
+	s3URL, err := p.StorageProvider.UploadFile(ctx, videoPath, "video/mp4")
+	if err != nil {
+		slog.Error("failed to upload final merged video to cloud storage", "job_id", jobID, "error", err)
+		return fmt.Errorf("upload final merged video: %w", err)
+	}
+
+	/* 4. Record local path in metadata; mark COMPLETED with final cloud storage URL */
 	if err := db.MergeJobMetadata(p.DB, jobID, map[string]interface{}{
 		db.MetadataKeyLocalVideoPath: videoPath,
 	}); err != nil {
 		return fmt.Errorf("update job metadata: %w", err)
 	}
-	if err := db.MarkJobCompletedAfterAudio(p.DB, jobID); err != nil {
-		return fmt.Errorf("set job completed: %w", err)
+
+	_, err = p.DB.ExecContext(ctx,
+		`UPDATE video_jobs
+		 SET status = 'COMPLETED', cloud_storage_url = ?, updated_at = datetime('now'), completed_at = datetime('now')
+		 WHERE id = ?`,
+		s3URL, jobID,
+	)
+	if err != nil {
+		return fmt.Errorf("set job completed and cloud URL: %w", err)
 	}
 
 	/* 5. Enqueue Publish Task */
@@ -108,6 +123,6 @@ func (p *VideoProcessor) HandleAddAudioTask(ctx context.Context, t *asynq.Task) 
 		return fmt.Errorf("enqueue publish task: %w", err)
 	}
 
-	slog.Info("audio successfully merged and job completed", "job_id", jobID)
+	slog.Info("audio successfully merged and job completed with cloud storage offload", "job_id", jobID, "s3_url", s3URL)
 	return nil
 }
