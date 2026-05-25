@@ -38,16 +38,20 @@ func (p *VideoProcessor) HandleReconcileJobsTask(ctx context.Context, t *asynq.T
 	if err != nil {
 		return fmt.Errorf("query stuck processing jobs: %w", err)
 	}
-	defer stuckProcessingRows.Close()
 
-	var processingReconciled int
+	var stuckProcessingIDs []string
 	for stuckProcessingRows.Next() {
 		var id string
 		if err := stuckProcessingRows.Scan(&id); err != nil {
 			slog.Error("failed to scan stuck processing row", "error", err)
 			continue
 		}
+		stuckProcessingIDs = append(stuckProcessingIDs, id)
+	}
+	stuckProcessingRows.Close() // Explicitly close cursor early to release connection
 
+	var processingReconciled int
+	for _, id := range stuckProcessingIDs {
 		/* Mark as FAILED so that the retry_count is incremented and requeued */
 		errMsg := "stuck in PROCESSING for >1h; automatically reconciled to FAILED for retry"
 		if err := db.SetJobFailed(p.DB, id, errMsg); err != nil {
@@ -66,22 +70,30 @@ func (p *VideoProcessor) HandleReconcileJobsTask(ctx context.Context, t *asynq.T
 	if err != nil {
 		return fmt.Errorf("query stuck intermediate jobs: %w", err)
 	}
-	defer stuckIntermediateRows.Close()
 
-	var intermediateReconciled int
+	type intermediateJob struct {
+		id     string
+		status string
+	}
+	var stuckIntermediates []intermediateJob
 	for stuckIntermediateRows.Next() {
 		var id, status string
 		if err := stuckIntermediateRows.Scan(&id, &status); err != nil {
 			slog.Error("failed to scan stuck intermediate row", "error", err)
 			continue
 		}
+		stuckIntermediates = append(stuckIntermediates, intermediateJob{id: id, status: status})
+	}
+	stuckIntermediateRows.Close() // Explicitly close cursor early to release connection
 
-		errMsg := fmt.Sprintf("stuck in intermediate state %s for >1h; automatically reconciled to FAILED for retry", status)
-		if err := db.SetJobFailed(p.DB, id, errMsg); err != nil {
-			slog.Error("failed to reconcile stuck intermediate job to FAILED", "job_id", id, "status", status, "error", err)
+	var intermediateReconciled int
+	for _, j := range stuckIntermediates {
+		errMsg := fmt.Sprintf("stuck in intermediate state %s for >1h; automatically reconciled to FAILED for retry", j.status)
+		if err := db.SetJobFailed(p.DB, j.id, errMsg); err != nil {
+			slog.Error("failed to reconcile stuck intermediate job to FAILED", "job_id", j.id, "status", j.status, "error", err)
 		} else {
 			intermediateReconciled++
-			slog.Warn("reconciled stuck intermediate job to FAILED", "job_id", id, "status", status)
+			slog.Warn("reconciled stuck intermediate job to FAILED", "job_id", j.id, "status", j.status)
 		}
 	}
 
