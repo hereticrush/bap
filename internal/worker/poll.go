@@ -31,12 +31,21 @@ func (p *VideoProcessor) HandlePollStatusTask(ctx context.Context, t *asynq.Task
 
 	for _, job := range jobs {
 		if job.AITaskID == "" {
-			continue /* Sanity check, should not happen */
+			continue
 		}
 
-		res, err := p.Provider.CheckStatus(ctx, job.AITaskID)
+		prov := p.Providers[job.AIProvider]
+		if prov == nil {
+			prov = p.Provider
+		}
+		if prov == nil {
+			slog.Error("no video provider available for job", "job_id", job.ID, "ai_provider", job.AIProvider)
+			continue
+		}
+
+		res, err := prov.CheckStatus(ctx, job.AITaskID)
 		if err != nil {
-			slog.Error("check status failed", "job_id", job.ID, "error", err)
+			slog.Error("check status failed", "job_id", job.ID, "provider", prov.Name(), "error", err)
 			continue /* Move to next job */
 		}
 

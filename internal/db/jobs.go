@@ -118,14 +118,14 @@ func CreateJob(db *sql.DB, aiProvider string) (*VideoJob, error) {
  * SetJobProcessing marks a job as PROCESSING and stores the
  * AI provider's task ID for subsequent status polling.
  *
- * Called after RunwayAdapter.GenerateVideo() returns a task ID.
+ * Called after video generation adapter returns a task ID.
  */
-func SetJobProcessing(db *sql.DB, jobID string, aiTaskID string) error {
+func SetJobProcessing(db *sql.DB, jobID string, aiTaskID string, aiProvider string) error {
 	_, err := db.Exec(
 		`UPDATE video_jobs
-		 SET status = 'PROCESSING', ai_task_id = ?, updated_at = datetime('now')
+		 SET status = 'PROCESSING', ai_task_id = ?, ai_provider = ?, updated_at = datetime('now')
 		 WHERE id = ?`,
-		aiTaskID, jobID,
+		aiTaskID, aiProvider, jobID,
 	)
 	return err
 }

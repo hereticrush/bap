@@ -109,10 +109,12 @@ func UseImageAnchor(metadataJSON string, defaultWhenUnset bool) bool {
 }
 
 /*
- * IsProviderImageRef reports whether s is a value Runway can fetch (not a local path).
+ * IsProviderImageRef reports whether s is a value the AI providers can fetch (not a local path).
  */
 func IsProviderImageRef(s string) bool {
 	return strings.HasPrefix(s, "runway://") ||
+		strings.HasPrefix(s, "luma://") ||
+		strings.HasPrefix(s, "local://") ||
 		strings.HasPrefix(s, "https://") ||
 		strings.HasPrefix(s, "http://") ||
 		strings.HasPrefix(s, "data:")

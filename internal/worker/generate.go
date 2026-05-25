@@ -32,6 +32,8 @@ import (
 type VideoProcessor struct {
 	DB                  *sql.DB
 	Provider            video.AIVideoProvider
+	Providers           map[string]video.AIVideoProvider
+	ProviderOrder       []string
 	Publisher           publisher.Publisher
 	TTSProvider         tts.TTSProvider
 	ImageProvider       image.AIImageProvider
@@ -102,21 +104,57 @@ func (p *VideoProcessor) HandleGenerateVideoTask(ctx context.Context, t *asynq.T
 	} else if strings.Contains(metadataJSON.String, db.MetadataKeyImageAnchors) {
 		slog.Warn("image_anchors key present but no valid provider refs", "job_id", jobID)
 	}
-	/* 3. Submit to AI Provider */
-	taskID, err := p.Provider.GenerateVideo(ctx, req)
-	if err != nil {
-		/* Mark as failed so it can be retried */
-		if setErr := db.SetJobFailed(p.DB, jobID, err.Error()); setErr != nil {
-			slog.Error("failed to set job failed status", "job_id", jobID, "error", setErr)
+	/* 3. Submit to AI Provider with automatic failover chain */
+	var taskID string
+	var successfulProvider video.AIVideoProvider
+	var errors []string
+
+	var activeProviders []video.AIVideoProvider
+	for _, name := range p.ProviderOrder {
+		if prov, ok := p.Providers[name]; ok {
+			activeProviders = append(activeProviders, prov)
 		}
-		return fmt.Errorf("generate video: %w", err)
+	}
+	if len(activeProviders) == 0 && p.Provider != nil {
+		activeProviders = []video.AIVideoProvider{p.Provider}
 	}
 
-	/* 4. Update job to PROCESSING */
-	if err := db.SetJobProcessing(p.DB, jobID, taskID); err != nil {
+	if len(activeProviders) == 0 {
+		errMsg := "no active video providers configured"
+		if setErr := db.SetJobFailed(p.DB, jobID, errMsg); setErr != nil {
+			slog.Error("failed to set job failed status", "job_id", jobID, "error", setErr)
+		}
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	for _, prov := range activeProviders {
+		slog.Info("attempting video generation with provider", "job_id", jobID, "provider", prov.Name())
+		tID, err := prov.GenerateVideo(ctx, req)
+		if err != nil {
+			errStr := fmt.Sprintf("%s error: %v", prov.Name(), err)
+			slog.Warn("provider video generation failed, attempting failover", "job_id", jobID, "error", errStr)
+			errors = append(errors, errStr)
+			continue
+		}
+		taskID = tID
+		successfulProvider = prov
+		break
+	}
+
+	if successfulProvider == nil {
+		combinedErr := strings.Join(errors, "; ")
+		/* Mark as failed so it can be retried */
+		if setErr := db.SetJobFailed(p.DB, jobID, combinedErr); setErr != nil {
+			slog.Error("failed to set job failed status", "job_id", jobID, "error", setErr)
+		}
+		return fmt.Errorf("all video providers failed: %s", combinedErr)
+	}
+
+	/* 4. Update job to PROCESSING with the successful provider */
+	if err := db.SetJobProcessing(p.DB, jobID, taskID, successfulProvider.Name()); err != nil {
 		return fmt.Errorf("set job processing: %w", err)
 	}
 
-	slog.Info("video generation submitted successfully", "job_id", jobID, "ai_task_id", taskID)
+	slog.Info("video generation submitted successfully", "job_id", jobID, "provider", successfulProvider.Name(), "ai_task_id", taskID)
 	return nil
 }

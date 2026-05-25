@@ -51,6 +51,12 @@ func RunScheduler(redisURL string) error {
 		return fmt.Errorf("register disk cleanup task: %w", err)
 	}
 
+	/* 4. Periodic job reconciliation every 30 minutes */
+	reconcileTask := asynq.NewTask(TypeReconcileJobs, nil)
+	if _, err := scheduler.Register("*/30 * * * *", reconcileTask); err != nil {
+		return fmt.Errorf("register job reconciliation task: %w", err)
+	}
+
 	slog.Info("starting asynq scheduler")
 	if err := scheduler.Run(); err != nil {
 		return fmt.Errorf("run scheduler: %w", err)

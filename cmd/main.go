@@ -104,10 +104,25 @@ func runServe() {
 		}
 	}()
 
-	/* Select the AI video provider */
-	videoProvider, err := selectVideoProvider(cfg)
+	/* Initialize Storage Provider (S3 with Stub fallback) */
+	var storageProvider storage.StorageProvider
+	if cfg.S3Bucket != "" {
+		slog.Info("initializing S3 cloud storage provider", "bucket", cfg.S3Bucket, "region", cfg.S3Region, "endpoint", cfg.S3Endpoint)
+		s3Prov, err := storage.NewS3StorageProvider(cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Endpoint, cfg.S3ForcePathStyle)
+		if err != nil {
+			slog.Error("failed to initialize S3 storage provider", "error", err)
+			os.Exit(1)
+		}
+		storageProvider = s3Prov
+	} else {
+		slog.Warn("S3_BUCKET is not set; falling back to StubStorageProvider (local only)")
+		storageProvider = storage.NewStubStorageProvider()
+	}
+
+	/* Select the AI video providers list */
+	videoProviders, err := selectVideoProviders(cfg, storageProvider)
 	if err != nil {
-		slog.Error("failed to select video provider", "error", err)
+		slog.Error("failed to select video providers", "error", err)
 		os.Exit(1)
 	}
 
@@ -124,29 +139,17 @@ func runServe() {
 	imageProvider := image.NewPollinationsAdapter()
 
 	var assetUploader video.AssetUploader
-	if u, ok := videoProvider.(video.AssetUploader); ok {
-		assetUploader = u
-	}
-
-	/* Initialize Storage Provider (S3 with Stub fallback) */
-	var storageProvider storage.StorageProvider
-	if cfg.S3Bucket != "" {
-		slog.Info("initializing S3 cloud storage provider", "bucket", cfg.S3Bucket, "region", cfg.S3Region, "endpoint", cfg.S3Endpoint)
-		s3Prov, err := storage.NewS3StorageProvider(cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Endpoint, cfg.S3ForcePathStyle)
-		if err != nil {
-			slog.Error("failed to initialize S3 storage provider", "error", err)
-			os.Exit(1)
+	for _, prov := range videoProviders {
+		if u, ok := prov.(video.AssetUploader); ok {
+			assetUploader = u
+			break
 		}
-		storageProvider = s3Prov
-	} else {
-		slog.Warn("S3_BUCKET is not set; falling back to StubStorageProvider (local only)")
-		storageProvider = storage.NewStubStorageProvider()
 	}
 
 	/* Initialize Asynq scheduler and workers */
 	go func() {
 		if err := worker.RunServer(
-			cfg.RedisURL, database, videoProvider, youtubePublisher, ttsProvider,
+			cfg.RedisURL, database, videoProviders, youtubePublisher, ttsProvider,
 			imageProvider, assetUploader, storageProvider, cfg.EnableImageAnchors, filepath.Join("data", "videos"),
 		); err != nil {
 			slog.Error("asynq worker server failed", "error", err)
@@ -279,16 +282,25 @@ func selectBuilder(cfg *config.Config) (prompt.AIPromptBuilder, error) {
 }
 
 /*
- * selectVideoProvider returns the AIVideoProvider adapter matching
- * the ACTIVE_AI_PROVIDER config value.
+ * selectVideoProviders initializes and returns the list of active AIVideoProvider
+ * adapters matching the VIDEO_PROVIDERS config prioritized list.
  */
-func selectVideoProvider(cfg *config.Config) (video.AIVideoProvider, error) {
-	switch cfg.ActiveAIProvider {
-	case "RUNWAY":
-		return video.NewRunwayAdapter(cfg.RunwayAPIKey, cfg.RunwayModel, cfg.RunwayMaxPerHour), nil
-	default:
-		return nil, fmt.Errorf("unknown video provider: %s", cfg.ActiveAIProvider)
+func selectVideoProviders(cfg *config.Config, storageProv storage.StorageProvider) ([]video.AIVideoProvider, error) {
+	var providers []video.AIVideoProvider
+	for _, name := range cfg.VideoProviders {
+		switch name {
+		case "RUNWAY":
+			providers = append(providers, video.NewRunwayAdapter(cfg.RunwayAPIKey, cfg.RunwayModel, cfg.RunwayMaxPerHour))
+		case "LUMA":
+			providers = append(providers, video.NewLumaAdapter(cfg.LumaAPIKey, cfg.LumaModel, cfg.LumaMaxPerHour, storageProv))
+		default:
+			return nil, fmt.Errorf("unknown video provider: %s", name)
+		}
 	}
+	if len(providers) == 0 {
+		return nil, fmt.Errorf("no active video providers configured")
+	}
+	return providers, nil
 }
 
 /*

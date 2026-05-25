@@ -173,7 +173,7 @@ func TestJobLifecycle(t *testing.T) {
 	job, _ := CreateJob(db, "RUNWAY")
 
 	/* 1. Mark PROCESSING */
-	if err := SetJobProcessing(db, job.ID, "task_123"); err != nil {
+	if err := SetJobProcessing(db, job.ID, "task_123", "RUNWAY"); err != nil {
 		t.Fatalf("SetJobProcessing failed: %v", err)
 	}
 

@@ -24,7 +24,7 @@ import (
  * RunServer starts the Asynq worker server to consume background jobs.
  * This is a blocking call, it should be run in a goroutine.
  */
-func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub publisher.Publisher, ttsProv tts.TTSProvider, imgProv image.AIImageProvider, uploader video.AssetUploader, storageProv storage.StorageProvider, defaultImageAnchors bool, videoOutputDir string) error {
+func RunServer(redisURL string, db *sql.DB, providers []video.AIVideoProvider, pub publisher.Publisher, ttsProv tts.TTSProvider, imgProv image.AIImageProvider, uploader video.AssetUploader, storageProv storage.StorageProvider, defaultImageAnchors bool, videoOutputDir string) error {
 	redisConnOpt, err := asynq.ParseRedisURI(redisURL)
 	if err != nil {
 		return fmt.Errorf("parse redis url: %w", err)
@@ -43,9 +43,23 @@ func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub 
 		},
 	)
 
+	providersMap := make(map[string]video.AIVideoProvider)
+	var order []string
+	for _, p := range providers {
+		providersMap[p.Name()] = p
+		order = append(order, p.Name())
+	}
+
+	var primaryProvider video.AIVideoProvider
+	if len(providers) > 0 {
+		primaryProvider = providers[0]
+	}
+
 	processor := &VideoProcessor{
 		DB:                  db,
-		Provider:            provider,
+		Provider:            primaryProvider,
+		Providers:           providersMap,
+		ProviderOrder:       order,
 		Publisher:           pub,
 		TTSProvider:         ttsProv,
 		ImageProvider:       imgProv,
@@ -65,6 +79,7 @@ func RunServer(redisURL string, db *sql.DB, provider video.AIVideoProvider, pub 
 	mux.HandleFunc(TypeAddAudio, processor.HandleAddAudioTask)
 	mux.HandleFunc(TypePublishVideo, processor.HandlePublishVideoTask)
 	mux.HandleFunc(TypeDiskCleanup, processor.HandleDiskCleanupTask)
+	mux.HandleFunc(TypeReconcileJobs, processor.HandleReconcileJobsTask)
 
 	slog.Info("starting asynq worker server", "redis_url", redisURL)
 	if err := srv.Run(mux); err != nil {

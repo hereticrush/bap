@@ -13,15 +13,21 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 /* Config holds the complete application configuration. */
 type Config struct {
-	/* AI Video Provider */
-	ActiveAIProvider string /* RUNWAY, LUMA, KLING */
+	/* AI Video Providers */
+	ActiveAIProvider string   /* RUNWAY, LUMA, etc. */
+	VideoProviders   []string /* Ordered failover list of video providers */
 	RunwayAPIKey     string
 	RunwayModel      string /* gen3a_turbo, gen4_turbo, gen4.5, etc. */
 	RunwayMaxPerHour int    /* Sliding-window hourly rate limit for Runway API */
+	LumaAPIKey       string
+	LumaModel        string /* ray-2, photon-1, photon-flash-1, etc. */
+	LumaMaxPerHour   int    /* Sliding-window hourly rate limit for Luma API */
+
 
 	/* AI Prompt Builder */
 	ActivePromptBuilder string /* GEMINI, PASSTHROUGH */
@@ -69,12 +75,32 @@ type Config struct {
 func Load() (*Config, error) {
 	cfg := &Config{}
 
-	/* --- AI Video Provider --- */
-	val, err := required("ACTIVE_AI_PROVIDER")
-	if err != nil {
-		return nil, err
+	/* --- AI Video Provider list --- */
+	providersStr := os.Getenv("VIDEO_PROVIDERS")
+	if providersStr != "" {
+		parts := strings.Split(providersStr, ",")
+		for _, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				cfg.VideoProviders = append(cfg.VideoProviders, strings.ToUpper(trimmed))
+			}
+		}
 	}
-	cfg.ActiveAIProvider = val
+
+	activeAIProvider := os.Getenv("ACTIVE_AI_PROVIDER")
+	if len(cfg.VideoProviders) == 0 {
+		if activeAIProvider == "" {
+			// Backwards compatibility default fallback
+			cfg.VideoProviders = []string{"RUNWAY"}
+			cfg.ActiveAIProvider = "RUNWAY"
+		} else {
+			cfg.VideoProviders = []string{strings.ToUpper(strings.TrimSpace(activeAIProvider))}
+			cfg.ActiveAIProvider = strings.ToUpper(strings.TrimSpace(activeAIProvider))
+		}
+	} else {
+		cfg.ActiveAIProvider = cfg.VideoProviders[0]
+	}
+
 	cfg.RunwayAPIKey = os.Getenv("RUNWAY_API_KEY")
 	cfg.RunwayModel = withDefault("RUNWAY_MODEL", "gen3a_turbo")
 
@@ -84,6 +110,16 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("RUNWAY_MAX_PER_HOUR must be a valid integer: %w", err)
 	}
 	cfg.RunwayMaxPerHour = runwayRate
+
+	cfg.LumaAPIKey = os.Getenv("LUMA_API_KEY")
+	cfg.LumaModel = withDefault("LUMA_MODEL", "ray-2")
+
+	lumaRateStr := withDefault("LUMA_MAX_PER_HOUR", "10")
+	lumaRate, err := strconv.Atoi(lumaRateStr)
+	if err != nil {
+		return nil, fmt.Errorf("LUMA_MAX_PER_HOUR must be a valid integer: %w", err)
+	}
+	cfg.LumaMaxPerHour = lumaRate
 
 	/* --- AI Prompt Builder --- */
 	cfg.ActivePromptBuilder = withDefault("ACTIVE_PROMPT_BUILDER", "PASSTHROUGH")
