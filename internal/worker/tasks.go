@@ -16,6 +16,7 @@ const (
 	TypeAddAudio      = "video:add_audio"
 	TypePublishVideo  = "video:publish"
 	TypeDiskCleanup   = "video:disk_cleanup"
+	TypeReconcileJobs = "video:reconcile"
 )
 
 /* Add any struct definitions for task payloads here if needed in the future. */
