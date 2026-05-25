@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/hereticrush/bap/internal/adapter/image"
+	"github.com/hereticrush/bap/internal/adapter/storage"
 	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/db"
@@ -35,6 +36,7 @@ type VideoProcessor struct {
 	TTSProvider         tts.TTSProvider
 	ImageProvider       image.AIImageProvider
 	Uploader            video.AssetUploader
+	StorageProvider     storage.StorageProvider
 	DefaultImageAnchors bool
 	Client              *asynq.Client
 	VideoOutputDir      string
