@@ -124,7 +124,7 @@ func (p *VideoProcessor) HandleGenerateVideoTask(ctx context.Context, t *asynq.T
 		if setErr := db.SetJobFailed(p.DB, jobID, errMsg); setErr != nil {
 			slog.Error("failed to set job failed status", "job_id", jobID, "error", setErr)
 		}
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	for _, prov := range activeProviders {
