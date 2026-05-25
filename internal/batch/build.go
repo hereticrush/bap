@@ -32,8 +32,8 @@ import (
  *   3. For each seed: call builder.BuildPrompt(), INSERT result
  *   4. COMMIT (or ROLLBACK on any error)
  */
-func BuildBatch(ctx context.Context, db *sql.DB, builder prompt.AIPromptBuilder, batch prompt.BatchInput) error {
-	tx, err := db.BeginTx(ctx, nil)
+func BuildBatch(ctx context.Context, sqliteDB *sql.DB, builder prompt.AIPromptBuilder, batch prompt.BatchInput) error {
+	tx, err := sqliteDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/hereticrush/bap/internal/adapter/storage"
 	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/publisher"
@@ -124,15 +125,16 @@ func TestHandleGenerateVideoTask(t *testing.T) {
 	pub := &mockPublisher{}
 	
 	processor := &VideoProcessor{
-		DB:             db,
-		Provider:       provider,
-		Publisher:      pub,
-		Client:         client,
-		VideoOutputDir: "data/videos",
+		DB:              db,
+		Provider:        provider,
+		Publisher:       pub,
+		StorageProvider: storage.NewStubStorageProvider(),
+		Client:          client,
+		VideoOutputDir:  "data/videos",
 	}
 
 	/* Seed a job for generate handler */
-	database.Exec(`INSERT INTO video_jobs (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status)
+	db.Exec(`INSERT INTO video_jobs (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status)
 		VALUES ('job_vid', 1, 'prompt text', 'TEST', 'MOCK', 'PENDING')`)
 
 	/* 4. Execute the handler directly */
@@ -169,9 +171,10 @@ func TestHandleGenerateVideoTask_RejectsLocalAnchor(t *testing.T) {
 
 	provider := &mockVideoProvider{taskIDToReturn: "t1"}
 	processor := &VideoProcessor{
-		DB:       database,
-		Provider: provider,
-		Client:   client,
+		DB:              database,
+		Provider:        provider,
+		StorageProvider: storage.NewStubStorageProvider(),
+		Client:          client,
 	}
 
 	err := processor.HandleGenerateVideoTask(context.Background(),
@@ -206,10 +209,11 @@ func TestHandlePublishVideoTask(t *testing.T) {
 	}
 
 	processor := &VideoProcessor{
-		DB:             db,
-		Publisher:      pub,
-		Client:         client,
-		VideoOutputDir: "data/videos",
+		DB:              db,
+		Publisher:       pub,
+		StorageProvider: storage.NewStubStorageProvider(),
+		Client:          client,
+		VideoOutputDir:  "data/videos",
 	}
 
 	task := asynq.NewTask(TypePublishVideo, []byte(`{"job_id":"job_1"}`))
@@ -247,10 +251,11 @@ func TestHandleAddAudioTask(t *testing.T) {
 	}
 
 	processor := &VideoProcessor{
-		DB:             db,
-		TTSProvider:    ttsProv,
-		Client:         client,
-		VideoOutputDir: "data/videos",
+		DB:              db,
+		TTSProvider:     ttsProv,
+		StorageProvider: storage.NewStubStorageProvider(),
+		Client:          client,
+		VideoOutputDir:  "data/videos",
 	}
 
 	/* We skip the ffmpeg execution in test by ensuring the text generation works.
