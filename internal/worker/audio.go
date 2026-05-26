@@ -45,7 +45,8 @@ func (p *VideoProcessor) HandleAddAudioTask(ctx context.Context, t *asynq.Task) 
 		return fmt.Errorf("fetch job: %w", err)
 	}
 
-	textToRead := db.TTSText(metadataJSON.String, promptSnapshot)
+	meta := db.ParseJobMetadata(metadataJSON.String)
+	textToRead := meta.GetVoiceScript(promptSnapshot)
 	if textToRead == "" {
 		return fmt.Errorf("no text available for TTS (job_id=%s)", jobID)
 	}

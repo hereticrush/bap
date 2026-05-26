@@ -76,27 +76,19 @@ func (p *VideoProcessor) HandleGenerateVideoTask(ctx context.Context, t *asynq.T
 		AspectRatio: "1280:720",
 	}
 
-	if metadataJSON.Valid && metadataJSON.String != "" {
-		var meta struct {
-			ImageAnchors []string `json:"image_anchors"`
+	meta := db.ParseJobMetadata(metadataJSON.String)
+	for _, ref := range meta.GetImageAnchors() {
+		if ref == "" {
+			continue
 		}
-		if err := json.Unmarshal([]byte(metadataJSON.String), &meta); err == nil {
-			for _, ref := range meta.ImageAnchors {
-				if ref == "" {
-					continue
-				}
-				if !db.IsProviderImageRef(ref) {
-					if setErr := db.SetJobFailed(p.DB, jobID,
-						fmt.Sprintf("image_anchors contains local path %q; re-run pipeline after deploy", ref)); setErr != nil {
-						slog.Error("failed to set job failed status", "job_id", jobID, "error", setErr)
-					}
-					return fmt.Errorf("invalid image anchor reference: %s", ref)
-				}
-				req.ImageURLs = append(req.ImageURLs, ref)
+		if !db.IsProviderImageRef(ref) {
+			if setErr := db.SetJobFailed(p.DB, jobID,
+				fmt.Sprintf("image_anchors contains local path %q; re-run pipeline after deploy", ref)); setErr != nil {
+				slog.Error("failed to set job failed status", "job_id", jobID, "error", setErr)
 			}
-		} else {
-			slog.Warn("failed to parse job metadata", "job_id", jobID, "error", err)
+			return fmt.Errorf("invalid image anchor reference: %s", ref)
 		}
+		req.ImageURLs = append(req.ImageURLs, ref)
 	}
 
 	if len(req.ImageURLs) > 0 {

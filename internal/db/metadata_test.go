@@ -24,13 +24,13 @@ func TestMetadataJSON(t *testing.T) {
 
 func TestTTSText(t *testing.T) {
 	meta := `{"voice_script":"Narration only"}`
-	if got := TTSText(meta, "Long cinematic prompt"); got != "Narration only" {
+	if got := ParseJobMetadata(meta).GetVoiceScript("Long cinematic prompt"); got != "Narration only" {
 		t.Errorf("expected voice_script, got %q", got)
 	}
-	if got := TTSText(`{}`, "Fallback prompt"); got != "Fallback prompt" {
+	if got := ParseJobMetadata(`{}`).GetVoiceScript("Fallback prompt"); got != "Fallback prompt" {
 		t.Errorf("expected fallback, got %q", got)
 	}
-	if got := TTSText("", "Fallback prompt"); got != "Fallback prompt" {
+	if got := ParseJobMetadata("").GetVoiceScript("Fallback prompt"); got != "Fallback prompt" {
 		t.Errorf("expected fallback with empty metadata, got %q", got)
 	}
 }
@@ -68,7 +68,7 @@ func TestMergeJobMetadata(t *testing.T) {
 	if meta == "" || meta[len(meta)-1] != '}' {
 		t.Errorf("unexpected metadata: %q", meta)
 	}
-	if got := TTSText(meta, ""); got != "" {
+	if got := ParseJobMetadata(meta).GetVoiceScript(""); got != "" {
 		// no voice_script in this job
 	}
 	_ = localPath
@@ -94,22 +94,22 @@ func TestCreateJobCopiesPromptMetadata(t *testing.T) {
 	if job.Metadata != `{"voice_script":"copied script"}` {
 		t.Errorf("metadata not copied: %q", job.Metadata)
 	}
-	if TTSText(job.Metadata, job.PromptTextSnapshot) != "copied script" {
+	if ParseJobMetadata(job.Metadata).GetVoiceScript(job.PromptTextSnapshot) != "copied script" {
 		t.Error("expected voice_script from copied metadata")
 	}
 }
 
 func TestUseImageAnchor(t *testing.T) {
-	if !UseImageAnchor(`{"use_image_anchor":"true"}`, false) {
+	if !ParseJobMetadata(`{"use_image_anchor":"true"}`).GetUseImageAnchor(false) {
 		t.Error("expected true from seed override")
 	}
-	if UseImageAnchor(`{"use_image_anchor":"false"}`, true) {
+	if ParseJobMetadata(`{"use_image_anchor":"false"}`).GetUseImageAnchor(true) {
 		t.Error("expected false from seed override")
 	}
-	if !UseImageAnchor("", true) {
+	if !ParseJobMetadata("").GetUseImageAnchor(true) {
 		t.Error("expected default when unset")
 	}
-	if !UseImageAnchor(`{"voice_script":"x"}`, true) {
+	if !ParseJobMetadata(`{"voice_script":"x"}`).GetUseImageAnchor(true) {
 		t.Error("expected default when key absent")
 	}
 }
@@ -148,34 +148,34 @@ func TestMarkJobCompletedAfterAudioPreservesURL(t *testing.T) {
 
 func TestYoutubeGetters(t *testing.T) {
 	/* 1. Title fallback */
-	if got := GetYoutubeTitle(`{"youtube_title":"Neon rain meditations"}`, "default"); got != "Neon rain meditations" {
+	if got := ParseJobMetadata(`{"youtube_title":"Neon rain meditations"}`).GetYoutubeTitle("default"); got != "Neon rain meditations" {
 		t.Errorf("expected custom title, got %q", got)
 	}
-	if got := GetYoutubeTitle(`{}`, "default"); got != "default" {
+	if got := ParseJobMetadata(`{}`).GetYoutubeTitle("default"); got != "default" {
 		t.Errorf("expected default title, got %q", got)
 	}
 
 	/* 2. Description fallback */
-	if got := GetYoutubeDescription(`{"youtube_description":"Desc test"}`, "default"); got != "Desc test" {
+	if got := ParseJobMetadata(`{"youtube_description":"Desc test"}`).GetYoutubeDescription("default"); got != "Desc test" {
 		t.Errorf("expected custom description, got %q", got)
 	}
-	if got := GetYoutubeDescription(`{}`, "default"); got != "default" {
+	if got := ParseJobMetadata(`{}`).GetYoutubeDescription("default"); got != "default" {
 		t.Errorf("expected default description, got %q", got)
 	}
 
 	/* 3. Privacy fallback & normalization */
-	if got := GetYoutubePrivacy(`{"youtube_privacy":"PUBLIC"}`, "private"); got != "public" {
+	if got := ParseJobMetadata(`{"youtube_privacy":"PUBLIC"}`).GetYoutubePrivacy("private"); got != "public" {
 		t.Errorf("expected public, got %q", got)
 	}
-	if got := GetYoutubePrivacy(`{}`, "private"); got != "private" {
+	if got := ParseJobMetadata(`{}`).GetYoutubePrivacy("private"); got != "private" {
 		t.Errorf("expected private default, got %q", got)
 	}
 
 	/* 4. Playlist ID */
-	if got := GetYoutubePlaylistID(`{"youtube_playlist_id":"PL123"}`); got != "PL123" {
+	if got := ParseJobMetadata(`{"youtube_playlist_id":"PL123"}`).GetYoutubePlaylistID(); got != "PL123" {
 		t.Errorf("expected playlist PL123, got %q", got)
 	}
-	if got := GetYoutubePlaylistID(`{}`); got != "" {
+	if got := ParseJobMetadata(`{}`).GetYoutubePlaylistID(); got != "" {
 		t.Errorf("expected empty playlist ID, got %q", got)
 	}
 
@@ -183,20 +183,69 @@ func TestYoutubeGetters(t *testing.T) {
 	defaultTags := []string{"ai", "bap"}
 
 	// Comma separated
-	gotComma := GetYoutubeTags(`{"youtube_tags":"one, two,three "}`, defaultTags)
+	gotComma := ParseJobMetadata(`{"youtube_tags":"one, two,three "}`).GetYoutubeTags(defaultTags)
 	if len(gotComma) != 3 || gotComma[0] != "one" || gotComma[1] != "two" || gotComma[2] != "three" {
 		t.Errorf("unexpected tags from comma string: %v", gotComma)
 	}
 
 	// JSON array
-	gotArray := GetYoutubeTags(`{"youtube_tags":["alpha", "beta"]}`, defaultTags)
+	gotArray := ParseJobMetadata(`{"youtube_tags":["alpha", "beta"]}`).GetYoutubeTags(defaultTags)
 	if len(gotArray) != 2 || gotArray[0] != "alpha" || gotArray[1] != "beta" {
 		t.Errorf("unexpected tags from JSON array: %v", gotArray)
 	}
 
 	// Fallback when empty or missing
-	gotFallback := GetYoutubeTags(`{}`, defaultTags)
+	gotFallback := ParseJobMetadata(`{}`).GetYoutubeTags(defaultTags)
 	if len(gotFallback) != 2 || gotFallback[0] != "ai" || gotFallback[1] != "bap" {
 		t.Errorf("unexpected fallback tags: %v", gotFallback)
+	}
+}
+
+func TestJobMetadataMethods(t *testing.T) {
+	jsonStr := `{"voice_script":"script text","local_video_path":"path.mp4","image_anchors":["a","b"],"image_anchors_local":["c","d"],"use_image_anchor":"true","youtube_title":"Title","youtube_description":"Desc","youtube_tags":["tag1","tag2"],"youtube_privacy":"UNLISTED","youtube_playlist_id":"PL1"}`
+	meta := ParseJobMetadata(jsonStr)
+
+	if meta.GetVoiceScript("fb") != "script text" {
+		t.Error("failed GetVoiceScript")
+	}
+	if meta.GetLocalVideoPath() != "path.mp4" {
+		t.Error("failed GetLocalVideoPath")
+	}
+	if len(meta.GetImageAnchors()) != 2 || meta.GetImageAnchors()[0] != "a" {
+		t.Error("failed GetImageAnchors")
+	}
+	if len(meta.GetImageAnchorsLocal()) != 2 || meta.GetImageAnchorsLocal()[0] != "c" {
+		t.Error("failed GetImageAnchorsLocal")
+	}
+	if !meta.GetUseImageAnchor(false) {
+		t.Error("failed GetUseImageAnchor")
+	}
+	if meta.GetYoutubeTitle("fb") != "Title" {
+		t.Error("failed GetYoutubeTitle")
+	}
+	if meta.GetYoutubeDescription("fb") != "Desc" {
+		t.Error("failed GetYoutubeDescription")
+	}
+	if meta.GetYoutubePrivacy("fb") != "unlisted" {
+		t.Error("failed GetYoutubePrivacy")
+	}
+	if meta.GetYoutubePlaylistID() != "PL1" {
+		t.Error("failed GetYoutubePlaylistID")
+	}
+	tags := meta.GetYoutubeTags([]string{"fb"})
+	if len(tags) != 2 || tags[0] != "tag1" || tags[1] != "tag2" {
+		t.Errorf("failed GetYoutubeTags: %v", tags)
+	}
+
+	/* Verify empty json parsing is fully safe */
+	emptyMeta := ParseJobMetadata("")
+	if emptyMeta.GetYoutubeTitle("fb") != "fb" {
+		t.Error("failed empty GetYoutubeTitle")
+	}
+	if emptyMeta.GetUseImageAnchor(true) != true {
+		t.Error("failed empty GetUseImageAnchor")
+	}
+	if len(emptyMeta.GetYoutubeTags([]string{"fb"})) != 1 {
+		t.Error("failed empty GetYoutubeTags")
 	}
 }
