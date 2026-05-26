@@ -42,6 +42,10 @@ func Open(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
+	/* Configure connection pooling for serialized SQLite access */
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	/* Configure SQLite for concurrent access (System Architecture §2) */
 	pragmas := []string{
 		"PRAGMA journal_mode = WAL",

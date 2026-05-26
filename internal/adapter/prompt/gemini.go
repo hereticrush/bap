@@ -37,6 +37,7 @@ type GeminiAdapter struct {
 	callLog    []time.Time
 	mu         sync.Mutex
 	client     *http.Client
+	baseURL    string
 }
 
 /*
@@ -57,6 +58,7 @@ func NewGeminiAdapter(apiKey, model string, maxPerHour int) *GeminiAdapter {
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
+		baseURL:    geminiBaseURL,
 	}
 }
 
@@ -92,7 +94,7 @@ func (g *GeminiAdapter) BuildPrompt(ctx context.Context, req PromptBuildRequest)
 	}
 
 	/* Step 3: POST to Gemini API */
-	url := fmt.Sprintf("%s/%s:generateContent?key=%s", geminiBaseURL, g.model, g.apiKey)
+	url := fmt.Sprintf("%s/%s:generateContent?key=%s", g.baseURL, g.model, g.apiKey)
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
