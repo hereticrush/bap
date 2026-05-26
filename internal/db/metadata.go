@@ -18,6 +18,12 @@ const (
 	MetadataKeyImageAnchors      = "image_anchors"
 	MetadataKeyImageAnchorsLocal = "image_anchors_local"
 	MetadataKeyUseImageAnchor    = "use_image_anchor"
+
+	MetadataKeyYoutubeTitle       = "youtube_title"
+	MetadataKeyYoutubeDescription = "youtube_description"
+	MetadataKeyYoutubeTags        = "youtube_tags"
+	MetadataKeyYoutubePrivacy     = "youtube_privacy"
+	MetadataKeyYoutubePlaylistID  = "youtube_playlist_id"
 )
 
 /*
@@ -132,4 +138,108 @@ func MarkJobCompletedAfterAudio(db *sql.DB, jobID string) error {
 		jobID,
 	)
 	return err
+}
+
+/*
+ * GetYoutubeTitle returns the title to use for YouTube. If set in metadata,
+ * it returns that; otherwise it falls back to the default value.
+ */
+func GetYoutubeTitle(metadataJSON string, fallback string) string {
+	if metadataJSON != "" {
+		var meta map[string]string
+		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
+			if title := meta[MetadataKeyYoutubeTitle]; title != "" {
+				return title
+			}
+		}
+	}
+	return fallback
+}
+
+/*
+ * GetYoutubeDescription returns the description to use for YouTube.
+ * If set in metadata, it returns that; otherwise it falls back to the default value.
+ */
+func GetYoutubeDescription(metadataJSON string, fallback string) string {
+	if metadataJSON != "" {
+		var meta map[string]string
+		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
+			if desc := meta[MetadataKeyYoutubeDescription]; desc != "" {
+				return desc
+			}
+		}
+	}
+	return fallback
+}
+
+/*
+ * GetYoutubePrivacy returns the privacy to use for YouTube.
+ * If set in metadata, it returns that; otherwise it falls back to the default value.
+ */
+func GetYoutubePrivacy(metadataJSON string, fallback string) string {
+	if metadataJSON != "" {
+		var meta map[string]string
+		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
+			if privacy := meta[MetadataKeyYoutubePrivacy]; privacy != "" {
+				return strings.ToLower(strings.TrimSpace(privacy))
+			}
+		}
+	}
+	return fallback
+}
+
+/*
+ * GetYoutubePlaylistID returns the playlist ID to use for YouTube.
+ * If set in metadata, it returns that; otherwise it returns empty.
+ */
+func GetYoutubePlaylistID(metadataJSON string) string {
+	if metadataJSON != "" {
+		var meta map[string]string
+		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
+			return meta[MetadataKeyYoutubePlaylistID]
+		}
+	}
+	return ""
+}
+
+/*
+ * GetYoutubeTags returns the tags to use for YouTube. If set in metadata
+ * as a JSON array or a comma-separated string, it parses them;
+ * otherwise it returns the default tags.
+ */
+func GetYoutubeTags(metadataJSON string, defaultTags []string) []string {
+	if metadataJSON == "" {
+		return defaultTags
+	}
+	var meta map[string]interface{}
+	if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
+		if val, ok := meta[MetadataKeyYoutubeTags]; ok {
+			switch v := val.(type) {
+			case string:
+				if v == "" {
+					return defaultTags
+				}
+				parts := strings.Split(v, ",")
+				var tags []string
+				for _, p := range parts {
+					trimmed := strings.TrimSpace(p)
+					if trimmed != "" {
+						tags = append(tags, trimmed)
+					}
+				}
+				return tags
+			case []interface{}:
+				var tags []string
+				for _, item := range v {
+					if s, ok := item.(string); ok && s != "" {
+						tags = append(tags, s)
+					}
+				}
+				if len(tags) > 0 {
+					return tags
+				}
+			}
+		}
+	}
+	return defaultTags
 }

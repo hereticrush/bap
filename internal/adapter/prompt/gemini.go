@@ -141,15 +141,52 @@ func (g *GeminiAdapter) BuildPrompt(ctx context.Context, req PromptBuildRequest)
 
 	tokensUsed := geminiResp.UsageMetadata.TotalTokenCount
 
+	/* Try to parse structured JSON response */
+	var generated struct {
+		Prompt      string   `json:"prompt"`
+		Title       string   `json:"youtube_title"`
+		Description string   `json:"youtube_description"`
+		Tags        []string `json:"youtube_tags"`
+	}
+
+	enrichedPrompt := enrichedText
+	var meta map[string]string
+
+	if err := json.Unmarshal([]byte(enrichedText), &generated); err == nil && generated.Prompt != "" {
+		enrichedPrompt = generated.Prompt
+		meta = make(map[string]string)
+		if generated.Title != "" {
+			meta["youtube_title"] = generated.Title
+		}
+		if generated.Description != "" {
+			meta["youtube_description"] = generated.Description
+		}
+		if len(generated.Tags) > 0 {
+			if tagsJSON, err := json.Marshal(generated.Tags); err == nil {
+				meta["youtube_tags"] = string(tagsJSON)
+			}
+		}
+		slog.Info("gemini structured metadata successfully parsed",
+			"job_title", generated.Title,
+			"tags_count", len(generated.Tags),
+		)
+	} else {
+		slog.Warn("gemini returned raw text or incomplete JSON; using fallback plain text prompt",
+			"model", g.model,
+			"error", err,
+		)
+	}
+
 	slog.Info("gemini prompt enriched",
 		"model", g.model,
 		"tokens_used", tokensUsed,
-		"enriched_length", len(enrichedText),
+		"enriched_length", len(enrichedPrompt),
 	)
 
 	return PromptBuildResult{
-		EnrichedPrompt: enrichedText,
+		EnrichedPrompt: enrichedPrompt,
 		TokensUsed:     tokensUsed,
+		Metadata:       meta,
 	}, nil
 }
 
@@ -216,15 +253,28 @@ func (g *GeminiAdapter) buildPayload(req PromptBuildRequest) geminiRequest {
 				},
 			},
 		},
+		GenerationConfig: &geminiGenerationConfig{
+			ResponseMimeType: "application/json",
+		},
 	}
 
-	/* Include system instruction if provided */
-	if req.SystemPrompt != "" {
-		payload.SystemInstruction = &geminiContent{
-			Parts: []geminiPart{
-				{Text: req.SystemPrompt},
-			},
-		}
+	/* Build structured system prompt instruction */
+	systemText := req.SystemPrompt
+	if systemText == "" {
+		systemText = "You are an expert cinematic video director. Expand the seed into a dense, highly descriptive prompt optimized for AI video generation."
+	}
+	systemText += "\n\nYou MUST respond ONLY with a valid JSON object matching this schema:\n" +
+		"{\n" +
+		"  \"prompt\": \"The fully expanded cinematic video prompt\",\n" +
+		"  \"youtube_title\": \"An engaging, clickable title under 70 characters\",\n" +
+		"  \"youtube_description\": \"An SEO-optimized video description containing keywords\",\n" +
+		"  \"youtube_tags\": [\"tag1\", \"tag2\", \"tag3\"]\n" +
+		"}"
+
+	payload.SystemInstruction = &geminiContent{
+		Parts: []geminiPart{
+			{Text: systemText},
+		},
 	}
 
 	return payload
@@ -233,8 +283,13 @@ func (g *GeminiAdapter) buildPayload(req PromptBuildRequest) geminiRequest {
 /* ── Gemini API request/response types ────────────────────── */
 
 type geminiRequest struct {
-	Contents          []geminiContent `json:"contents"`
-	SystemInstruction *geminiContent  `json:"systemInstruction,omitempty"`
+	Contents          []geminiContent         `json:"contents"`
+	SystemInstruction *geminiContent          `json:"systemInstruction,omitempty"`
+	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
+}
+
+type geminiGenerationConfig struct {
+	ResponseMimeType string `json:"responseMimeType,omitempty"`
 }
 
 type geminiContent struct {

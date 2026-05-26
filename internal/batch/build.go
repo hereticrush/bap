@@ -76,7 +76,16 @@ func BuildBatch(ctx context.Context, sqliteDB *sql.DB, builder prompt.AIPromptBu
 			return fmt.Errorf("seed #%d failed: %w", i+1, err)
 		}
 
-		metaJSON, err := db.MetadataJSON(seed.Metadata)
+		// Merge LLM-generated metadata with manual seed overrides (manual takes precedence)
+		mergedMeta := make(map[string]string)
+		for k, v := range result.Metadata {
+			mergedMeta[k] = v
+		}
+		for k, v := range seed.Metadata {
+			mergedMeta[k] = v
+		}
+
+		metaJSON, err := db.MetadataJSON(mergedMeta)
 		if err != nil {
 			return fmt.Errorf("marshal metadata for seed #%d: %w", i+1, err)
 		}

@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -90,6 +91,50 @@ func (p *Publisher) Publish(ctx context.Context, req publisher.PublishRequest) (
 	response, err := call.Do()
 	if err != nil {
 		return publisher.PublishResult{}, fmt.Errorf("insert video: %w", err)
+	}
+
+	/* 1. Upload custom thumbnail if specified and exists */
+	if req.ThumbnailPath != "" {
+		if _, statErr := os.Stat(req.ThumbnailPath); statErr == nil {
+			slog.Info("uploading custom thumbnail to YouTube", "video_id", response.Id, "path", req.ThumbnailPath)
+			thumbFile, openErr := os.Open(req.ThumbnailPath)
+			if openErr == nil {
+				defer thumbFile.Close()
+				thumbCall := service.Thumbnails.Set(response.Id)
+				thumbCall = thumbCall.Media(thumbFile)
+				if _, thumbErr := thumbCall.Do(); thumbErr != nil {
+					// Fault isolated: print warning, do not fail entire publishing task
+					slog.Warn("failed to set custom thumbnail for YouTube video", "video_id", response.Id, "error", thumbErr)
+				} else {
+					slog.Info("custom thumbnail uploaded successfully", "video_id", response.Id)
+				}
+			} else {
+				slog.Warn("failed to open custom thumbnail file", "path", req.ThumbnailPath, "error", openErr)
+			}
+		} else {
+			slog.Warn("custom thumbnail path specified but not found on disk", "path", req.ThumbnailPath)
+		}
+	}
+
+	/* 2. Associate with target playlist if specified */
+	if req.PlaylistID != "" {
+		slog.Info("associating uploaded video with YouTube playlist", "video_id", response.Id, "playlist_id", req.PlaylistID)
+		playlistItem := &youtube.PlaylistItem{
+			Snippet: &youtube.PlaylistItemSnippet{
+				PlaylistId: req.PlaylistID,
+				ResourceId: &youtube.ResourceId{
+					Kind:    "youtube#video",
+					VideoId: response.Id,
+				},
+			},
+		}
+		playlistCall := service.PlaylistItems.Insert([]string{"snippet"}, playlistItem)
+		if _, playlistErr := playlistCall.Do(); playlistErr != nil {
+			// Fault isolated: print warning, do not fail entire publishing task
+			slog.Warn("failed to add YouTube video to target playlist", "video_id", response.Id, "playlist_id", req.PlaylistID, "error", playlistErr)
+		} else {
+			slog.Info("added video to target YouTube playlist successfully", "video_id", response.Id, "playlist_id", req.PlaylistID)
+		}
 	}
 
 	return publisher.PublishResult{

@@ -11,11 +11,13 @@ import "context"
  * PublishRequest holds platform-agnostic metadata required to upload a video.
  */
 type PublishRequest struct {
-	FilePath    string   /* Path to the local video file */
-	Title       string   /* Video title */
-	Description string   /* Video description */
-	Tags        []string /* Array of tags */
-	Privacy     string   /* e.g., "private", "public", "unlisted" */
+	FilePath      string   /* Path to the local video file */
+	Title         string   /* Video title */
+	Description   string   /* Video description */
+	Tags          []string /* Array of tags */
+	Privacy       string   /* e.g., "private", "public", "unlisted" */
+	ThumbnailPath string   /* Optional local image path for custom thumbnail */
+	PlaylistID    string   /* Optional target playlist identifier */
 }
 
 /*

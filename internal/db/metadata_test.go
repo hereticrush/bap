@@ -145,3 +145,58 @@ func TestMarkJobCompletedAfterAudioPreservesURL(t *testing.T) {
 		t.Errorf("cloud_storage_url overwritten: %q", url)
 	}
 }
+
+func TestYoutubeGetters(t *testing.T) {
+	/* 1. Title fallback */
+	if got := GetYoutubeTitle(`{"youtube_title":"Neon rain meditations"}`, "default"); got != "Neon rain meditations" {
+		t.Errorf("expected custom title, got %q", got)
+	}
+	if got := GetYoutubeTitle(`{}`, "default"); got != "default" {
+		t.Errorf("expected default title, got %q", got)
+	}
+
+	/* 2. Description fallback */
+	if got := GetYoutubeDescription(`{"youtube_description":"Desc test"}`, "default"); got != "Desc test" {
+		t.Errorf("expected custom description, got %q", got)
+	}
+	if got := GetYoutubeDescription(`{}`, "default"); got != "default" {
+		t.Errorf("expected default description, got %q", got)
+	}
+
+	/* 3. Privacy fallback & normalization */
+	if got := GetYoutubePrivacy(`{"youtube_privacy":"PUBLIC"}`, "private"); got != "public" {
+		t.Errorf("expected public, got %q", got)
+	}
+	if got := GetYoutubePrivacy(`{}`, "private"); got != "private" {
+		t.Errorf("expected private default, got %q", got)
+	}
+
+	/* 4. Playlist ID */
+	if got := GetYoutubePlaylistID(`{"youtube_playlist_id":"PL123"}`); got != "PL123" {
+		t.Errorf("expected playlist PL123, got %q", got)
+	}
+	if got := GetYoutubePlaylistID(`{}`); got != "" {
+		t.Errorf("expected empty playlist ID, got %q", got)
+	}
+
+	/* 5. Tags parsing (comma-separated string vs. JSON string array) */
+	defaultTags := []string{"ai", "bap"}
+
+	// Comma separated
+	gotComma := GetYoutubeTags(`{"youtube_tags":"one, two,three "}`, defaultTags)
+	if len(gotComma) != 3 || gotComma[0] != "one" || gotComma[1] != "two" || gotComma[2] != "three" {
+		t.Errorf("unexpected tags from comma string: %v", gotComma)
+	}
+
+	// JSON array
+	gotArray := GetYoutubeTags(`{"youtube_tags":["alpha", "beta"]}`, defaultTags)
+	if len(gotArray) != 2 || gotArray[0] != "alpha" || gotArray[1] != "beta" {
+		t.Errorf("unexpected tags from JSON array: %v", gotArray)
+	}
+
+	// Fallback when empty or missing
+	gotFallback := GetYoutubeTags(`{}`, defaultTags)
+	if len(gotFallback) != 2 || gotFallback[0] != "ai" || gotFallback[1] != "bap" {
+		t.Errorf("unexpected fallback tags: %v", gotFallback)
+	}
+}

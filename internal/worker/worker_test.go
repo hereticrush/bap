@@ -283,3 +283,79 @@ func TestHandleAddAudioTask(t *testing.T) {
 		t.Errorf("expected job status to change or error, got %q", status)
 	}
 }
+
+type capturePublisher struct {
+	lastReq publisher.PublishRequest
+	called  bool
+}
+
+func (c *capturePublisher) Name() string { return "CAPTURE_PUBLISHER" }
+func (c *capturePublisher) Publish(ctx context.Context, req publisher.PublishRequest) (publisher.PublishResult, error) {
+	c.called = true
+	c.lastReq = req
+	return publisher.PublishResult{PlatformVideoID: "yt_captured", URL: "http://yt"}, nil
+}
+
+func TestHandlePublishVideoTask_WithEnrichedMetadata(t *testing.T) {
+	mr := miniredis.RunT(t)
+	dbase := setupTestDB(t)
+	defer dbase.Close()
+
+	client := asynq.NewClient(asynq.RedisClientOpt{Addr: mr.Addr()})
+	defer client.Close()
+
+	/* Seed a COMPLETED job with complete YouTube metadata overrides and image anchors */
+	dbase.Exec("INSERT INTO prompts (id, seed_text, enriched_text, status, builder_used) VALUES (1, 'a', 'b', 'USED', 'TEST')")
+	dbase.Exec(`
+		INSERT INTO video_jobs (id, prompt_id, prompt_text_snapshot, prompt_builder_used, ai_provider, status, cloud_storage_url, metadata)
+		VALUES ('job_2', 1, 'mock prompt text', 'TEST', 'RUNWAY', 'COMPLETED', 'http://url',
+		'{"youtube_title":"Custom Hook Title","youtube_description":"Engaging description","youtube_tags":"one,two","youtube_privacy":"public","youtube_playlist_id":"PL_TEST","image_anchors_local":["data/images/anchor.png"]}')
+	`)
+
+	pub := &capturePublisher{}
+
+	processor := &VideoProcessor{
+		DB:              dbase,
+		Publisher:       pub,
+		StorageProvider: storage.NewStubStorageProvider(),
+		Client:          client,
+		VideoOutputDir:  "data/videos",
+	}
+
+	task := asynq.NewTask(TypePublishVideo, []byte(`{"job_id":"job_2"}`))
+	err := processor.HandlePublishVideoTask(context.Background(), task)
+	if err != nil {
+		t.Fatalf("HandlePublishVideoTask failed: %v", err)
+	}
+
+	if !pub.called {
+		t.Fatal("expected Publish to be called")
+	}
+
+	/* Verify values mapped correctly from database metadata into PublishRequest */
+	req := pub.lastReq
+	if req.Title != "Custom Hook Title" {
+		t.Errorf("expected Title to be 'Custom Hook Title', got %q", req.Title)
+	}
+	if req.Description != "Engaging description" {
+		t.Errorf("expected Description to be 'Engaging description', got %q", req.Description)
+	}
+	if req.Privacy != "public" {
+		t.Errorf("expected Privacy to be 'public', got %q", req.Privacy)
+	}
+	if req.PlaylistID != "PL_TEST" {
+		t.Errorf("expected PlaylistID to be 'PL_TEST', got %q", req.PlaylistID)
+	}
+	if req.ThumbnailPath != "data/images/anchor.png" {
+		t.Errorf("expected ThumbnailPath to be 'data/images/anchor.png', got %q", req.ThumbnailPath)
+	}
+	if len(req.Tags) != 2 || req.Tags[0] != "one" || req.Tags[1] != "two" {
+		t.Errorf("expected Tags [one, two], got %v", req.Tags)
+	}
+
+	var status string
+	dbase.QueryRow("SELECT status FROM video_jobs WHERE id = 'job_2'").Scan(&status)
+	if status != "PUBLISHED" {
+		t.Errorf("expected job status PUBLISHED, got %q", status)
+	}
+}
