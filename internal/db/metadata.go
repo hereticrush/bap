@@ -43,10 +43,12 @@ func MetadataJSON(m map[string]string) ([]byte, error) {
  */
 func TTSText(metadataJSON string, promptSnapshot string) string {
 	if metadataJSON != "" {
-		var meta map[string]string
+		var meta map[string]interface{}
 		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			if script := meta[MetadataKeyVoiceScript]; script != "" {
-				return script
+			if val, ok := meta[MetadataKeyVoiceScript]; ok {
+				if s, ok := val.(string); ok && s != "" {
+					return s
+				}
 			}
 		}
 	}
@@ -96,11 +98,15 @@ func UseImageAnchor(metadataJSON string, defaultWhenUnset bool) bool {
 	if metadataJSON == "" {
 		return defaultWhenUnset
 	}
-	var meta map[string]string
+	var meta map[string]interface{}
 	if err := json.Unmarshal([]byte(metadataJSON), &meta); err != nil {
 		return defaultWhenUnset
 	}
-	v, ok := meta[MetadataKeyUseImageAnchor]
+	val, ok := meta[MetadataKeyUseImageAnchor]
+	if !ok {
+		return defaultWhenUnset
+	}
+	v, ok := val.(string)
 	if !ok {
 		return defaultWhenUnset
 	}
@@ -146,10 +152,12 @@ func MarkJobCompletedAfterAudio(db *sql.DB, jobID string) error {
  */
 func GetYoutubeTitle(metadataJSON string, fallback string) string {
 	if metadataJSON != "" {
-		var meta map[string]string
+		var meta map[string]interface{}
 		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			if title := meta[MetadataKeyYoutubeTitle]; title != "" {
-				return title
+			if val, ok := meta[MetadataKeyYoutubeTitle]; ok {
+				if s, ok := val.(string); ok && s != "" {
+					return s
+				}
 			}
 		}
 	}
@@ -162,10 +170,12 @@ func GetYoutubeTitle(metadataJSON string, fallback string) string {
  */
 func GetYoutubeDescription(metadataJSON string, fallback string) string {
 	if metadataJSON != "" {
-		var meta map[string]string
+		var meta map[string]interface{}
 		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			if desc := meta[MetadataKeyYoutubeDescription]; desc != "" {
-				return desc
+			if val, ok := meta[MetadataKeyYoutubeDescription]; ok {
+				if s, ok := val.(string); ok && s != "" {
+					return s
+				}
 			}
 		}
 	}
@@ -178,10 +188,12 @@ func GetYoutubeDescription(metadataJSON string, fallback string) string {
  */
 func GetYoutubePrivacy(metadataJSON string, fallback string) string {
 	if metadataJSON != "" {
-		var meta map[string]string
+		var meta map[string]interface{}
 		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			if privacy := meta[MetadataKeyYoutubePrivacy]; privacy != "" {
-				return strings.ToLower(strings.TrimSpace(privacy))
+			if val, ok := meta[MetadataKeyYoutubePrivacy]; ok {
+				if s, ok := val.(string); ok && s != "" {
+					return strings.ToLower(strings.TrimSpace(s))
+				}
 			}
 		}
 	}
@@ -194,9 +206,13 @@ func GetYoutubePrivacy(metadataJSON string, fallback string) string {
  */
 func GetYoutubePlaylistID(metadataJSON string) string {
 	if metadataJSON != "" {
-		var meta map[string]string
+		var meta map[string]interface{}
 		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			return meta[MetadataKeyYoutubePlaylistID]
+			if val, ok := meta[MetadataKeyYoutubePlaylistID]; ok {
+				if s, ok := val.(string); ok {
+					return s
+				}
+			}
 		}
 	}
 	return ""
