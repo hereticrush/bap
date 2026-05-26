@@ -54,31 +54,23 @@ func (p *VideoProcessor) HandlePublishVideoTask(ctx context.Context, t *asynq.Ta
 		return fmt.Errorf("fetch job metadata: %w", err)
 	}
 
-	metaStr := ""
-	if metadataJSON.Valid {
-		metaStr = metadataJSON.String
-	}
+	meta := db.ParseJobMetadata(metadataJSON.String)
 
 	/* Extract custom, LLM-generated, or fallback parameters */
 	defaultTitle := "AI Generated Video"
 	if len(promptText) > 50 {
 		defaultTitle = promptText[:50] + "..."
 	}
-	title := db.GetYoutubeTitle(metaStr, defaultTitle)
-	description := db.GetYoutubeDescription(metaStr, promptText)
-	privacy := db.GetYoutubePrivacy(metaStr, "private")
-	tags := db.GetYoutubeTags(metaStr, []string{"ai", "generated", "bap"})
-	playlistID := db.GetYoutubePlaylistID(metaStr)
+	title := meta.GetYoutubeTitle(defaultTitle)
+	description := meta.GetYoutubeDescription(promptText)
+	privacy := meta.GetYoutubePrivacy("private")
+	tags := meta.GetYoutubeTags([]string{"ai", "generated", "bap"})
+	playlistID := meta.GetYoutubePlaylistID()
 
 	/* Automatically locate local image anchor for custom video thumbnail */
 	thumbnailPath := ""
-	if metaStr != "" {
-		var meta struct {
-			ImageAnchorsLocal []string `json:"image_anchors_local"`
-		}
-		if err := json.Unmarshal([]byte(metaStr), &meta); err == nil && len(meta.ImageAnchorsLocal) > 0 {
-			thumbnailPath = meta.ImageAnchorsLocal[0]
-		}
+	if anchors := meta.GetImageAnchorsLocal(); len(anchors) > 0 {
+		thumbnailPath = anchors[0]
 	}
 
 	req := publisher.PublishRequest{

@@ -36,7 +36,8 @@ func (p *VideoProcessor) HandleStartPipelineTask(ctx context.Context, t *asynq.T
 		return fmt.Errorf("create job: %w", err)
 	}
 
-	useAnchor := db.UseImageAnchor(job.Metadata, p.DefaultImageAnchors)
+	meta := db.ParseJobMetadata(job.Metadata)
+	useAnchor := meta.GetUseImageAnchor(p.DefaultImageAnchors)
 	slog.Info("pipeline started", "job_id", job.ID, "use_image_anchor", useAnchor)
 
 	if !useAnchor {

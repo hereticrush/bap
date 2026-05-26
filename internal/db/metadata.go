@@ -38,22 +38,142 @@ func MetadataJSON(m map[string]string) ([]byte, error) {
 }
 
 /*
- * TTSText returns the text to send to TTS: voice_script from metadata when set,
- * otherwise the enriched prompt snapshot.
+ * JobMetadata represents the strongly-typed schema for BAP job and prompt metadata.
+ * Unmarshaling into this struct reduces dynamic allocations and simplifies data extraction.
  */
-func TTSText(metadataJSON string, promptSnapshot string) string {
+type JobMetadata struct {
+	VoiceScript       string   `json:"voice_script,omitempty"`
+	LocalVideoPath    string   `json:"local_video_path,omitempty"`
+	ImageAnchors      []string `json:"image_anchors,omitempty"`
+	ImageAnchorsLocal []string `json:"image_anchors_local,omitempty"`
+	UseImageAnchor    string   `json:"use_image_anchor,omitempty"`
+	YoutubeTitle      string   `json:"youtube_title,omitempty"`
+	YoutubeDescription string  `json:"youtube_description,omitempty"`
+	YoutubeTags       any      `json:"youtube_tags,omitempty"` // Can be a string or JSON array of strings
+	YoutubePrivacy    string   `json:"youtube_privacy,omitempty"`
+	YoutubePlaylistID string   `json:"youtube_playlist_id,omitempty"`
+}
+
+/*
+ * ParseJobMetadata deserializes job metadata JSON safely into a JobMetadata struct.
+ * Returns an empty struct if the JSON is empty or invalid.
+ */
+func ParseJobMetadata(metadataJSON string) *JobMetadata {
+	var meta JobMetadata
 	if metadataJSON != "" {
-		var meta map[string]interface{}
-		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			if val, ok := meta[MetadataKeyVoiceScript]; ok {
-				if s, ok := val.(string); ok && s != "" {
-					return s
-				}
+		_ = json.Unmarshal([]byte(metadataJSON), &meta)
+	}
+	return &meta
+}
+
+/* GetVoiceScript returns the voice script if set, otherwise the fallback value. */
+func (m *JobMetadata) GetVoiceScript(fallback string) string {
+	if m.VoiceScript != "" {
+		return m.VoiceScript
+	}
+	return fallback
+}
+
+/* GetLocalVideoPath returns the local video path if set. */
+func (m *JobMetadata) GetLocalVideoPath() string {
+	return m.LocalVideoPath
+}
+
+/* GetImageAnchors returns the image anchors slice. */
+func (m *JobMetadata) GetImageAnchors() []string {
+	return m.ImageAnchors
+}
+
+/* GetImageAnchorsLocal returns the local image anchors slice. */
+func (m *JobMetadata) GetImageAnchorsLocal() []string {
+	return m.ImageAnchorsLocal
+}
+
+/*
+ * GetUseImageAnchor returns whether to use an image anchor.
+ * Translates various string formats ("true", "1", "yes") safely.
+ */
+func (m *JobMetadata) GetUseImageAnchor(defaultWhenUnset bool) bool {
+	if m.UseImageAnchor == "" {
+		return defaultWhenUnset
+	}
+	switch strings.ToLower(strings.TrimSpace(m.UseImageAnchor)) {
+	case "true", "1", "yes":
+		return true
+	case "false", "0", "no":
+		return false
+	default:
+		return defaultWhenUnset
+	}
+}
+
+/* GetYoutubeTitle returns the title to use for YouTube. If empty, returns fallback. */
+func (m *JobMetadata) GetYoutubeTitle(fallback string) string {
+	if m.YoutubeTitle != "" {
+		return m.YoutubeTitle
+	}
+	return fallback
+}
+
+/* GetYoutubeDescription returns the description to use for YouTube. If empty, returns fallback. */
+func (m *JobMetadata) GetYoutubeDescription(fallback string) string {
+	if m.YoutubeDescription != "" {
+		return m.YoutubeDescription
+	}
+	return fallback
+}
+
+/* GetYoutubePrivacy returns the YouTube privacy setting, normalized to lowercase. */
+func (m *JobMetadata) GetYoutubePrivacy(fallback string) string {
+	if m.YoutubePrivacy != "" {
+		return strings.ToLower(strings.TrimSpace(m.YoutubePrivacy))
+	}
+	return fallback
+}
+
+/* GetYoutubePlaylistID returns the target YouTube playlist ID. */
+func (m *JobMetadata) GetYoutubePlaylistID() string {
+	return m.YoutubePlaylistID
+}
+
+/*
+ * GetYoutubeTags parses the YouTube tags. Supports both comma-separated string
+ * and JSON string array formats seamlessly.
+ */
+func (m *JobMetadata) GetYoutubeTags(defaultTags []string) []string {
+	if m.YoutubeTags == nil {
+		return defaultTags
+	}
+	switch v := m.YoutubeTags.(type) {
+	case string:
+		if v == "" {
+			return defaultTags
+		}
+		parts := strings.Split(v, ",")
+		var tags []string
+		for _, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				tags = append(tags, trimmed)
 			}
 		}
+		return tags
+	case []any:
+		var tags []string
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				tags = append(tags, s)
+			}
+		}
+		if len(tags) > 0 {
+			return tags
+		}
+	case []string:
+		return v
 	}
-	return promptSnapshot
+	return defaultTags
 }
+
 
 /*
  * MergeJobMetadata merges patch into the job's metadata JSON object.
@@ -89,36 +209,6 @@ func MergeJobMetadata(db *sql.DB, jobID string, patch map[string]interface{}) er
 	return err
 }
 
-/*
- * UseImageAnchor returns whether this job should generate and upload an image
- * anchor. Per-seed metadata use_image_anchor ("true"/"false") overrides
- * defaultWhenUnset when present.
- */
-func UseImageAnchor(metadataJSON string, defaultWhenUnset bool) bool {
-	if metadataJSON == "" {
-		return defaultWhenUnset
-	}
-	var meta map[string]interface{}
-	if err := json.Unmarshal([]byte(metadataJSON), &meta); err != nil {
-		return defaultWhenUnset
-	}
-	val, ok := meta[MetadataKeyUseImageAnchor]
-	if !ok {
-		return defaultWhenUnset
-	}
-	v, ok := val.(string)
-	if !ok {
-		return defaultWhenUnset
-	}
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "true", "1", "yes":
-		return true
-	case "false", "0", "no":
-		return false
-	default:
-		return defaultWhenUnset
-	}
-}
 
 /*
  * IsProviderImageRef reports whether s is a value the AI providers can fetch (not a local path).
@@ -146,116 +236,4 @@ func MarkJobCompletedAfterAudio(db *sql.DB, jobID string) error {
 	return err
 }
 
-/*
- * GetYoutubeTitle returns the title to use for YouTube. If set in metadata,
- * it returns that; otherwise it falls back to the default value.
- */
-func GetYoutubeTitle(metadataJSON string, fallback string) string {
-	if metadataJSON != "" {
-		var meta map[string]interface{}
-		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			if val, ok := meta[MetadataKeyYoutubeTitle]; ok {
-				if s, ok := val.(string); ok && s != "" {
-					return s
-				}
-			}
-		}
-	}
-	return fallback
-}
 
-/*
- * GetYoutubeDescription returns the description to use for YouTube.
- * If set in metadata, it returns that; otherwise it falls back to the default value.
- */
-func GetYoutubeDescription(metadataJSON string, fallback string) string {
-	if metadataJSON != "" {
-		var meta map[string]interface{}
-		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			if val, ok := meta[MetadataKeyYoutubeDescription]; ok {
-				if s, ok := val.(string); ok && s != "" {
-					return s
-				}
-			}
-		}
-	}
-	return fallback
-}
-
-/*
- * GetYoutubePrivacy returns the privacy to use for YouTube.
- * If set in metadata, it returns that; otherwise it falls back to the default value.
- */
-func GetYoutubePrivacy(metadataJSON string, fallback string) string {
-	if metadataJSON != "" {
-		var meta map[string]interface{}
-		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			if val, ok := meta[MetadataKeyYoutubePrivacy]; ok {
-				if s, ok := val.(string); ok && s != "" {
-					return strings.ToLower(strings.TrimSpace(s))
-				}
-			}
-		}
-	}
-	return fallback
-}
-
-/*
- * GetYoutubePlaylistID returns the playlist ID to use for YouTube.
- * If set in metadata, it returns that; otherwise it returns empty.
- */
-func GetYoutubePlaylistID(metadataJSON string) string {
-	if metadataJSON != "" {
-		var meta map[string]interface{}
-		if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-			if val, ok := meta[MetadataKeyYoutubePlaylistID]; ok {
-				if s, ok := val.(string); ok {
-					return s
-				}
-			}
-		}
-	}
-	return ""
-}
-
-/*
- * GetYoutubeTags returns the tags to use for YouTube. If set in metadata
- * as a JSON array or a comma-separated string, it parses them;
- * otherwise it returns the default tags.
- */
-func GetYoutubeTags(metadataJSON string, defaultTags []string) []string {
-	if metadataJSON == "" {
-		return defaultTags
-	}
-	var meta map[string]interface{}
-	if err := json.Unmarshal([]byte(metadataJSON), &meta); err == nil {
-		if val, ok := meta[MetadataKeyYoutubeTags]; ok {
-			switch v := val.(type) {
-			case string:
-				if v == "" {
-					return defaultTags
-				}
-				parts := strings.Split(v, ",")
-				var tags []string
-				for _, p := range parts {
-					trimmed := strings.TrimSpace(p)
-					if trimmed != "" {
-						tags = append(tags, trimmed)
-					}
-				}
-				return tags
-			case []interface{}:
-				var tags []string
-				for _, item := range v {
-					if s, ok := item.(string); ok && s != "" {
-						tags = append(tags, s)
-					}
-				}
-				if len(tags) > 0 {
-					return tags
-				}
-			}
-		}
-	}
-	return defaultTags
-}
