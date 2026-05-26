@@ -141,7 +141,15 @@ func TestGeminiAdapter_RateLimit(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(geminiResponse{
-			Candidates: []geminiCandidate{{{Content: geminiContent{Parts: []geminiPart{{Text: "success"}}}}}},
+			Candidates: []geminiCandidate{
+				{
+					Content: geminiContent{
+						Parts: []geminiPart{
+							{Text: "success"},
+						},
+					},
+				},
+			},
 		})
 	}))
 	defer server.Close()
