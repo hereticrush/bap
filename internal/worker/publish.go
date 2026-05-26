@@ -9,6 +9,7 @@ package worker
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -46,7 +47,7 @@ func (p *VideoProcessor) HandlePublishVideoTask(ctx context.Context, t *asynq.Ta
 	/* 3. Retrieve the job to get the prompt metadata for Title/Description/Tags/Playlist */
 	var promptText string
 	var metadataJSON sql.NullString
-	err = p.DB.QueryRow(
+	err := p.DB.QueryRow(
 		"SELECT prompt_text_snapshot, metadata FROM video_jobs WHERE id = ?", jobID,
 	).Scan(&promptText, &metadataJSON)
 	if err != nil {
