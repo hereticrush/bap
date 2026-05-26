@@ -27,8 +27,9 @@ type PromptBuildRequest struct {
  * enrichment call.
  */
 type PromptBuildResult struct {
-	EnrichedPrompt string /* The expanded, production-ready prompt */
-	TokensUsed     int    /* Number of tokens consumed by the LLM */
+	EnrichedPrompt string            /* The expanded, production-ready prompt */
+	TokensUsed     int               /* Number of tokens consumed by the LLM */
+	Metadata       map[string]string /* Extra generated metadata key-values */
 }
 
 /*

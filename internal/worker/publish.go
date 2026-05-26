@@ -9,6 +9,7 @@ package worker
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -43,30 +44,51 @@ func (p *VideoProcessor) HandlePublishVideoTask(ctx context.Context, t *asynq.Ta
 	/* 2. Determine the path to the downloaded video */
 	videoPath := filepath.Join(p.VideoOutputDir, fmt.Sprintf("%s.mp4", jobID))
 
-	/* 3. Retrieve the job to get the prompt metadata for Title/Description */
-	// We don't have a GetJobByID yet, let's just query it directly or add it.
-	// We will query it directly here to avoid adding more files right now.
+	/* 3. Retrieve the job to get the prompt metadata for Title/Description/Tags/Playlist */
 	var promptText string
+	var metadataJSON sql.NullString
 	err := p.DB.QueryRow(
-		"SELECT prompt_text_snapshot FROM video_jobs WHERE id = ?", jobID,
-	).Scan(&promptText)
+		"SELECT prompt_text_snapshot, metadata FROM video_jobs WHERE id = ?", jobID,
+	).Scan(&promptText, &metadataJSON)
 	if err != nil {
 		return fmt.Errorf("fetch job metadata: %w", err)
 	}
 
-	/* Extract title (first line or first 50 chars) and description */
-	title := "AI Generated Video"
-	description := promptText
+	metaStr := ""
+	if metadataJSON.Valid {
+		metaStr = metadataJSON.String
+	}
+
+	/* Extract custom, LLM-generated, or fallback parameters */
+	defaultTitle := "AI Generated Video"
 	if len(promptText) > 50 {
-		title = promptText[:50] + "..."
+		defaultTitle = promptText[:50] + "..."
+	}
+	title := db.GetYoutubeTitle(metaStr, defaultTitle)
+	description := db.GetYoutubeDescription(metaStr, promptText)
+	privacy := db.GetYoutubePrivacy(metaStr, "private")
+	tags := db.GetYoutubeTags(metaStr, []string{"ai", "generated", "bap"})
+	playlistID := db.GetYoutubePlaylistID(metaStr)
+
+	/* Automatically locate local image anchor for custom video thumbnail */
+	thumbnailPath := ""
+	if metaStr != "" {
+		var meta struct {
+			ImageAnchorsLocal []string `json:"image_anchors_local"`
+		}
+		if err := json.Unmarshal([]byte(metaStr), &meta); err == nil && len(meta.ImageAnchorsLocal) > 0 {
+			thumbnailPath = meta.ImageAnchorsLocal[0]
+		}
 	}
 
 	req := publisher.PublishRequest{
-		FilePath:    videoPath,
-		Title:       title,
-		Description: description,
-		Tags:        []string{"ai", "generated", "bap"},
-		Privacy:     "private",
+		FilePath:      videoPath,
+		Title:         title,
+		Description:   description,
+		Tags:          tags,
+		Privacy:       privacy,
+		ThumbnailPath: thumbnailPath,
+		PlaylistID:    playlistID,
 	}
 
 	slog.Info("publishing video", "job_id", jobID, "platform", p.Publisher.Name(), "file", videoPath)
