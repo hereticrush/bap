@@ -647,6 +647,15 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        @media (prefers-reduced-motion: reduce) {
+            .pulse-dot, .stat-card:hover, .job-card:hover, .timer-circle, .btn:hover {
+                animation: none !important;
+                transform: none !important;
+                transition: none !important;
+                box-shadow: none !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -702,6 +711,23 @@
                 <button class="tab-btn" data-filter="COMPLETED">Completed</button>
                 <button class="tab-btn" data-filter="PUBLISHED">Published</button>
                 <button class="tab-btn" data-filter="FAILED">Failed</button>
+            </div>
+
+            <!-- Glowing search box filter -->
+            <div class="search-box-container">
+                <input type="text" id="jobSearchInput" placeholder="🔍 Search by prompt text..." style="
+                    background: rgba(15, 23, 42, 0.8);
+                    border: 1px solid var(--border-glass);
+                    color: var(--text-main);
+                    padding: 0.55rem 1.25rem;
+                    border-radius: 10px;
+                    font-family: var(--font-outfit);
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                    outline: none;
+                    width: 280px;
+                    transition: all 0.3s ease;
+                " onfocus="this.style.borderColor='var(--primary)'; this.style.boxShadow='0 0 10px var(--glow-primary)';" onblur="this.style.borderColor='var(--border-glass)'; this.style.boxShadow='none';" oninput="handleSearch(this.value)">
             </div>
 
             <div class="action-buttons">
@@ -793,6 +819,32 @@
         let currentFilter = 'all';
         let refreshCountdown = 10;
         let refreshInterval = null;
+        let searchQuery = "";
+        let previouslyFocusedElement = null;
+
+        function handleSearch(val) {
+            searchQuery = val.toLowerCase().trim();
+            renderJobsGrid();
+        }
+
+        function trapFocus(e) {
+            if (e.key !== 'Tab') return;
+            const focusables = detailsModal.querySelectorAll('button, [tabindex="0"], a, video, img');
+            if (focusables.length === 0) return;
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+            if (e.shiftKey) {
+                if (document.activeElement === first) {
+                    last.focus();
+                    e.preventDefault();
+                }
+            } else {
+                if (document.activeElement === last) {
+                    first.focus();
+                    e.preventDefault();
+                }
+            }
+        }
 
         // Element caches
         const jobsGrid = document.getElementById('jobsGrid');
@@ -825,6 +877,13 @@
             closeModalBtn.addEventListener('click', closeModal);
             detailsModal.addEventListener('click', (e) => {
                 if (e.target === detailsModal) closeModal();
+            });
+
+            // Escape key listener to close modal for accessibility
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && detailsModal.classList.contains('active')) {
+                    closeModal();
+                }
             });
 
             // Tabs events
@@ -908,11 +967,21 @@
 
         function renderJobsGrid() {
             const filtered = allJobsData.filter(job => {
-                if (currentFilter === 'all') return true;
-                if (currentFilter === 'COMPLETED') {
-                    return job.Status === 'COMPLETED' || job.Status === 'VIDEO_READY';
+                let matchStatus = true;
+                if (currentFilter !== 'all') {
+                    if (currentFilter === 'COMPLETED') {
+                        matchStatus = job.Status === 'COMPLETED' || job.Status === 'VIDEO_READY';
+                    } else {
+                        matchStatus = job.Status === currentFilter;
+                    }
                 }
-                return job.Status === currentFilter;
+                
+                let matchQuery = true;
+                if (searchQuery !== "") {
+                    matchQuery = job.PromptTextSnapshot.toLowerCase().includes(searchQuery);
+                }
+                
+                return matchStatus && matchQuery;
             });
 
             if (filtered.length === 0) {
@@ -1065,8 +1134,17 @@
                 `;
             }
 
+            previouslyFocusedElement = document.activeElement;
+
             // Open overlay
             detailsModal.classList.add('active');
+
+            // Force browser to focus on the close button to trap tab keys immediately
+            setTimeout(() => {
+                closeModalBtn.focus();
+            }, 50);
+
+            detailsModal.addEventListener('keydown', trapFocus);
         }
 
         function closeModal() {
@@ -1079,6 +1157,10 @@
                 video.load();
             }
             detailsModal.classList.remove('active');
+            detailsModal.removeEventListener('keydown', trapFocus);
+            if (previouslyFocusedElement) {
+                previouslyFocusedElement.focus();
+            }
         }
     </script>
 </body>
