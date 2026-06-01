@@ -23,8 +23,10 @@ import (
 	"time"
 
 	"github.com/hereticrush/bap/internal/adapter/image"
+	"github.com/hereticrush/bap/internal/adapter/instagram"
 	"github.com/hereticrush/bap/internal/adapter/prompt"
 	"github.com/hereticrush/bap/internal/adapter/storage"
+	"github.com/hereticrush/bap/internal/adapter/tiktok"
 	"github.com/hereticrush/bap/internal/adapter/tts"
 	"github.com/hereticrush/bap/internal/adapter/video"
 	"github.com/hereticrush/bap/internal/adapter/youtube"
@@ -32,6 +34,7 @@ import (
 	"github.com/hereticrush/bap/internal/config"
 	"github.com/hereticrush/bap/internal/db"
 	"github.com/hereticrush/bap/internal/health"
+	"github.com/hereticrush/bap/internal/publisher"
 	"github.com/hereticrush/bap/internal/worker"
 )
 
@@ -126,11 +129,37 @@ func runServe() {
 		os.Exit(1)
 	}
 
-	/* Initialize the YouTube publisher */
-	youtubePublisher := youtube.NewPublisher(
-		filepath.Join("credentials", "youtube", "client_secret.json"),
-		filepath.Join("credentials", "youtube", "token.json"),
-	)
+	/* Initialize active publishers dynamically */
+	var activePublishers []publisher.Publisher
+	for _, platform := range cfg.PublishPlatforms {
+		switch platform {
+		case "YOUTUBE":
+			slog.Info("initializing YouTube publisher channel")
+			activePublishers = append(activePublishers, youtube.NewPublisher(
+				filepath.Join("credentials", "youtube", "client_secret.json"),
+				filepath.Join("credentials", "youtube", "token.json"),
+			))
+		case "TIKTOK":
+			slog.Info("initializing TikTok publisher channel")
+			activePublishers = append(activePublishers, tiktok.NewPublisher(
+				os.Getenv("TIKTOK_ACCESS_TOKEN"),
+			))
+		case "INSTAGRAM":
+			slog.Info("initializing Instagram Reels publisher channel")
+			activePublishers = append(activePublishers, instagram.NewPublisher(
+				os.Getenv("INSTAGRAM_ACCESS_TOKEN"),
+				os.Getenv("INSTAGRAM_ACCOUNT_ID"),
+			))
+		default:
+			slog.Warn("unknown publishing platform skipped", "platform", platform)
+		}
+	}
+
+	if len(activePublishers) == 0 {
+		slog.Warn("no active publishing platforms configured; falling back to stub mode")
+	}
+
+	compositePublisher := publisher.NewCompositePublisher(activePublishers...)
 
 	/* Initialize the ElevenLabs TTS provider */
 	ttsProvider := tts.NewElevenLabsAdapter(cfg.ElevenLabsAPIKey, cfg.ElevenLabsVoiceID)
@@ -149,7 +178,7 @@ func runServe() {
 	/* Initialize Asynq scheduler and workers */
 	go func() {
 		if err := worker.RunServer(
-			cfg.RedisURL, database, videoProviders, youtubePublisher, ttsProvider,
+			cfg.RedisURL, database, videoProviders, compositePublisher, ttsProvider,
 			imageProvider, assetUploader, storageProvider, cfg.EnableImageAnchors, filepath.Join("data", "videos"),
 		); err != nil {
 			slog.Error("asynq worker server failed", "error", err)
