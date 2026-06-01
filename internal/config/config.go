@@ -62,6 +62,11 @@ type Config struct {
 
 	/* Pipeline: default when seed metadata omits use_image_anchor */
 	EnableImageAnchors bool
+
+	/* Dynamic Subtitles & Multi-Platform Settings */
+	EnableSubtitles    bool
+	DefaultAspectRatio string
+	PublishPlatforms   []string
 }
 
 /*
@@ -168,6 +173,24 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("ENABLE_IMAGE_ANCHORS must be true or false: %w", err)
 	}
 	cfg.EnableImageAnchors = enableAnchors
+
+	/* --- Subtitles & Platforms Config --- */
+	enableSubsStr := withDefault("ENABLE_SUBTITLES", "true")
+	enableSubs, err := strconv.ParseBool(enableSubsStr)
+	if err != nil {
+		return nil, fmt.Errorf("ENABLE_SUBTITLES must be true or false: %w", err)
+	}
+	cfg.EnableSubtitles = enableSubs
+
+	cfg.DefaultAspectRatio = withDefault("DEFAULT_ASPECT_RATIO", "16:9")
+
+	pubPlatsStr := withDefault("PUBLISH_PLATFORMS", "YOUTUBE")
+	for _, part := range strings.Split(pubPlatsStr, ",") {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			cfg.PublishPlatforms = append(cfg.PublishPlatforms, strings.ToUpper(trimmed))
+		}
+	}
 
 	/* --- Health Server --- */
 	portStr := withDefault("HEALTH_PORT", "8081")

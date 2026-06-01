@@ -15,7 +15,8 @@ import "context"
  * AudioResult holds the outcome of a TTS generation call.
  */
 type AudioResult struct {
-	FilePath string /* Absolute or relative path to the generated audio file */
+	FilePath      string /* Absolute or relative path to the generated audio file */
+	SubtitlesPath string /* Optional path to local SRT subtitle file */
 }
 
 /*
