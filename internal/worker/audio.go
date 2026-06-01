@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/hereticrush/bap/internal/db"
 	"github.com/hibiken/asynq"
@@ -67,18 +68,39 @@ func (p *VideoProcessor) HandleAddAudioTask(ctx context.Context, t *asynq.Task) 
 	videoPath := filepath.Join(p.VideoOutputDir, fmt.Sprintf("%s.mp4", jobID))
 	finalPath := filepath.Join(p.VideoOutputDir, fmt.Sprintf("%s_final.mp4", jobID))
 
-	// ffmpeg -y -i video.mp4 -i audio.mp3 -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 final.mp4
-	cmd := exec.CommandContext(ctx, "ffmpeg",
-		"-y",                   // Overwrite output
-		"-i", videoPath,        // Input 1: The video
-		"-i", audioRes.FilePath, // Input 2: The audio
-		"-c:v", "copy",         // Copy video stream without re-encoding
-		"-c:a", "aac",          // Encode audio to AAC
-		"-map", "0:v:0",        // Use video from first input
-		"-map", "1:a:0",        // Use audio from second input
-		"-shortest",            // Finish encoding when the shortest input stream ends
-		finalPath,
-	)
+	enableSubtitles := os.Getenv("ENABLE_SUBTITLES") != "false"
+
+	var cmd *exec.Cmd
+	if audioRes.SubtitlesPath != "" && enableSubtitles {
+		slog.Info("burning subtitles into video using FFmpeg libx264 re-encoding", "job_id", jobID, "subtitles", audioRes.SubtitlesPath)
+		// For Windows, FFmpeg subtitles filter requires escaping backslashes and colons
+		escapedSrtPath := strings.ReplaceAll(audioRes.SubtitlesPath, "\\", "/")
+		escapedSrtPath = strings.ReplaceAll(escapedSrtPath, ":", "\\:")
+
+		cmd = exec.CommandContext(ctx, "ffmpeg",
+			"-y",
+			"-i", videoPath,
+			"-i", audioRes.FilePath,
+			"-vf", fmt.Sprintf("subtitles='%s'", escapedSrtPath),
+			"-c:v", "libx264",
+			"-c:a", "aac",
+			"-shortest",
+			finalPath,
+		)
+	} else {
+		slog.Info("merging audio and video using fast copy (no subtitles)", "job_id", jobID)
+		cmd = exec.CommandContext(ctx, "ffmpeg",
+			"-y",                   // Overwrite output
+			"-i", videoPath,        // Input 1: The video
+			"-i", audioRes.FilePath, // Input 2: The audio
+			"-c:v", "copy",         // Copy video stream without re-encoding
+			"-c:a", "aac",          // Encode audio to AAC
+			"-map", "0:v:0",        // Use video from first input
+			"-map", "1:a:0",        // Use audio from second input
+			"-shortest",            // Finish encoding when the shortest input stream ends
+			finalPath,
+		)
+	}
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
