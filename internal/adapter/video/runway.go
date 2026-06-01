@@ -101,6 +101,11 @@ func (r *RunwayAdapter) GenerateVideo(ctx context.Context, req GenerationRequest
 	}
 
 	ratio := req.AspectRatio
+	if ratio == "9:16" {
+		ratio = "720:1280"
+	} else if ratio == "16:9" {
+		ratio = "1280:720"
+	}
 	if ratio == "" {
 		ratio = "1280:720"
 	}
