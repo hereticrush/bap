@@ -15,6 +15,7 @@ package health
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,9 @@ import (
 
 	"github.com/hereticrush/bap/internal/db"
 )
+
+//go:embed dashboard.html
+var dashboardFS embed.FS
 
 /* Server wraps an http.Server and a database handle. */
 type Server struct {
@@ -72,6 +76,27 @@ func New(port int, database *sql.DB) *Server {
 
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/api/jobs", s.handleListJobs)
+
+	/* Serve dynamic dark-mode dashboard at the root */
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		data, err := dashboardFS.ReadFile("dashboard.html")
+		if err != nil {
+			slog.Error("failed to read embedded dashboard.html", "error", err)
+			http.Error(w, "dashboard template missing", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
+	})
+
+	/* Expose static video and image folders for browser playback previews */
+	mux.Handle("/videos/", http.StripPrefix("/videos/", http.FileServer(http.Dir("data/videos"))))
+	mux.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("data/images"))))
 
 	return s
 }
