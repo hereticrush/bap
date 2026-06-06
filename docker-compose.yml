@@ -31,5 +31,17 @@ services:
     volumes:
       - redis_data:/data
 
+  crawler:
+    build:
+      context: .
+      dockerfile: crawler/Dockerfile
+    image: ghcr.io/hereticrush/bap-crawler:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+
 volumes:
   redis_data:
