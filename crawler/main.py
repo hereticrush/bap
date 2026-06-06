@@ -27,7 +27,7 @@ logging.basicConfig(
 
 DB_PATH = os.environ.get("DB_PATH", "/app/data/bap.db")
 CRAWLER_FEED_URLS = os.environ.get("CRAWLER_FEED_URLS", "")
-CRAWLER_INTERVAL_SECONDS = int(os.environ.get("CRAWLER_INTERVAL_SECONDS", "3600"))
+CRAWLER_INTERVAL_SECONDS = int(os.environ.get("CRAWLER_INTERVAL_SECONDS", "7200"))
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 CRAWLER_GEMINI_MODEL = os.environ.get("CRAWLER_GEMINI_MODEL", "gemini-2.5-flash")
 
@@ -333,7 +333,7 @@ def main():
     if not CRAWLER_FEED_URLS:
         logging.warning("No CRAWLER_FEED_URLS configured. Sleeping indefinitely.")
         while True:
-            time.sleep(3600)
+            time.sleep(CRAWLER_INTERVAL_SECONDS)
 
     feed_list = [f.strip() for f in CRAWLER_FEED_URLS.split(",") if f.strip()]
     logging.info(f"Active crawl feeds: {feed_list}")
@@ -344,7 +344,7 @@ def main():
             for item in items:
                 process_feed_item(item)
                 # Sleep briefly between items to be nice to website hosts and respect API limits
-                time.sleep(2)
+                time.sleep(10)
         
         logging.info(f"Crawl cycle completed. Sleeping for {CRAWLER_INTERVAL_SECONDS} seconds...")
         time.sleep(CRAWLER_INTERVAL_SECONDS)
