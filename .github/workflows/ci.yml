@@ -39,7 +39,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.61.0
-        environment:
+        env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
           NODE_VERSION: 24
 
