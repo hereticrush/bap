@@ -303,10 +303,6 @@ def process_feed_item(item):
             tokens_used=tokens_used
         )
     
-        # Close the client after saving the data to db
-        client.close()
-
-
 def main():
     logging.info("Starting BAP Web Crawler service...")
     
@@ -329,6 +325,8 @@ def main():
         logging.info(f"Crawl cycle completed. Sleeping for {CRAWLER_INTERVAL_SECONDS} seconds...")
         time.sleep(CRAWLER_INTERVAL_SECONDS)
 
+    # Close the client after saving the data to db
+    client.close()
 
 if __name__ == "__main__":
     main()
