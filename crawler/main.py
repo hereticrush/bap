@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 import requests
 from bs4 import BeautifulSoup
 from google import genai
+from google.genai import types
 
 # Setup logging
 logging.basicConfig(
@@ -35,7 +36,6 @@ if not GEMINI_API_KEY:
     sys.exit(1)
 
 client = genai.Client(api_key=GEMINI_API_KEY)
-model = client.gemini_models.get(name=CRAWLER_GEMINI_MODEL)
 
 def get_db_connection():
     """Establishes connection to SQLite with WAL mode and busy timeout."""
@@ -212,18 +212,19 @@ def analyze_and_enrich_content(url, title, content):
     )
 
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "response_mime_type": "application/json",
-                "temperature": 0.2
-            },
-            safety_settings=[
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_LOW_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_LOW_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_LOW_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_LOW_AND_ABOVE"}
-            ]
+        response = client.models.generate_content(
+            model=CRAWLER_GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.2,
+                safety_settings=[
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE),
+                    types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE)
+                ]
+            )
         )
 
         text_out = response.text.strip() if response.text else ""
@@ -301,6 +302,9 @@ def process_feed_item(item):
             metadata_dict=None,
             tokens_used=tokens_used
         )
+    
+        # Close the client after saving the data to db
+        client.close()
 
 
 def main():
