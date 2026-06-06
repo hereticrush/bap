@@ -113,6 +113,12 @@ def parse_feed(feed_url):
             logging.error(f"Failed to fetch feed {feed_url}, status code: {resp.status_code}")
             return []
 
+        # Check if we received an HTML warning page or firewall block page instead of XML
+        content_type = resp.headers.get("Content-Type", "").lower()
+        if "html" in content_type or resp.content.strip().startswith(b"<!DOCTYPE html") or resp.content.strip().startswith(b"<html"):
+            logging.error(f"Failed to parse feed {feed_url}: Received HTML instead of XML (possible proxy block or SSL warning page).")
+            return []
+
         root = ET.fromstring(resp.content)
         items = []
 
@@ -275,13 +281,13 @@ def analyze_and_enrich_content(url, title, content):
 
 
 def process_feed_item(item):
-    """Processes a single item scraped from the feeds."""
+    """Processes a single item scraped from the feeds. Returns True if processed, False if skipped."""
     url = item["link"]
     title = item["title"]
 
     if check_already_crawled(url, title):
         logging.debug(f"Skipping already crawled article: {title}")
-        return
+        return False
 
     logging.info(f"Processing new article: {title} ({url})")
     
@@ -292,7 +298,7 @@ def process_feed_item(item):
     analysis = analyze_and_enrich_content(url, title, content)
     if analysis is None:
         logging.warning(f"Skipping article '{title}' due to transient Gemini API or network failure.")
-        return
+        return True  # Count as processed for sleep throttling since it attempted scraping/calling
 
     tokens_used = analysis.get("tokens_used", 0)
 
@@ -326,6 +332,7 @@ def process_feed_item(item):
             metadata_dict=None,
             tokens_used=tokens_used
         )
+    return True
     
 def main():
     logging.info("Starting BAP Web Crawler service...")
@@ -342,9 +349,10 @@ def main():
         for feed in feed_list:
             items = parse_feed(feed)
             for item in items:
-                process_feed_item(item)
-                # Sleep briefly between items to be nice to website hosts and respect API limits
-                time.sleep(10)
+                was_processed = process_feed_item(item)
+                if was_processed:
+                    # Sleep briefly between items to be nice to website hosts and respect API limits
+                    time.sleep(10)
         
         logging.info(f"Crawl cycle completed. Sleeping for {CRAWLER_INTERVAL_SECONDS} seconds...")
         time.sleep(CRAWLER_INTERVAL_SECONDS)
