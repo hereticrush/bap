@@ -15,7 +15,7 @@ import sqlite3
 import xml.etree.ElementTree as ET
 import requests
 from bs4 import BeautifulSoup
-import google.generativeai as genai
+from google import genai
 
 # Setup logging
 logging.basicConfig(
