@@ -34,9 +34,8 @@ if not GEMINI_API_KEY:
     logging.error("GEMINI_API_KEY is not set. Exiting.")
     sys.exit(1)
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(CRAWLER_GEMINI_MODEL)
-
+client = genai.Client(api_key=GEMINI_API_KEY)
+model = client.gemini_models.get(name=CRAWLER_GEMINI_MODEL)
 
 def get_db_connection():
     """Establishes connection to SQLite with WAL mode and busy timeout."""
