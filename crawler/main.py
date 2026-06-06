@@ -85,11 +85,30 @@ def save_prompt_to_db(url, enriched_text, status, metadata_dict, tokens_used):
         conn.close()
 
 
+import urllib3
+
+# Disable insecure request warnings for SSL fallback path
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def safe_requests_get(url, **kwargs):
+    """Performs requests.get, falling back to verify=False if an SSL error occurs."""
+    try:
+        return requests.get(url, **kwargs)
+    except requests.exceptions.SSLError as e:
+        logging.warning(f"SSL certificate verification failed for {url}. Retrying with verify=False. Error: {e}")
+        kwargs["verify"] = False
+        return requests.get(url, **kwargs)
+    except Exception as e:
+        logging.error(f"Failed to fetch URL {url}: {e}")
+        raise e
+
+
 def parse_feed(feed_url):
     """Fetches and parses an RSS 2.0 or Atom feed."""
     logging.info(f"Parsing feed: {feed_url}")
     try:
-        resp = requests.get(feed_url, timeout=15)
+        resp = safe_requests_get(feed_url, timeout=15)
         if resp.status_code != 200:
             logging.error(f"Failed to fetch feed {feed_url}, status code: {resp.status_code}")
             return []
@@ -138,7 +157,7 @@ def scrape_article_text(url):
     """Downloads the article page HTML and extracts clean body text."""
     logging.info(f"Scraping article text from: {url}")
     try:
-        resp = requests.get(url, timeout=15, headers={
+        resp = safe_requests_get(url, timeout=15, headers={
             "User-Agent": "BapBot/1.0 (Automated Content Crawler)"
         })
         if resp.status_code != 200:
@@ -216,6 +235,7 @@ def analyze_and_enrich_content(url, title, content):
             model=CRAWLER_GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
                 response_mime_type="application/json",
                 temperature=0.2,
                 safety_settings=[
@@ -251,7 +271,7 @@ def analyze_and_enrich_content(url, title, content):
     except Exception as e:
         # Catch API blocks, safety blocks or connection issues
         logging.error(f"Gemini API execution error: {e}")
-        return {"approved": False, "reason": f"Gemini API failure: {str(e)}"}
+        return None  # Return None to signal transient/API error
 
 
 def process_feed_item(item):
@@ -270,6 +290,10 @@ def process_feed_item(item):
     
     # Run Gemini Safety & Enrichment Validation
     analysis = analyze_and_enrich_content(url, title, content)
+    if analysis is None:
+        logging.warning(f"Skipping article '{title}' due to transient Gemini API or network failure.")
+        return
+
     tokens_used = analysis.get("tokens_used", 0)
 
     if analysis.get("approved") is True:
