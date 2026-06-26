@@ -53,7 +53,7 @@ func TestRunwayAdapter_UploadImage(t *testing.T) {
 	}))
 	defer apiSrv.Close()
 
-	adapter := NewRunwayAdapter("test-key", "gen3a_turbo", 100)
+	adapter := NewRunwayAdapter("test-key", "gen3a_turbo", 100, nil)
 	adapter.client = apiSrv.Client()
 
 	origBase := runwayBaseURL

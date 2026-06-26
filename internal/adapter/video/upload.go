@@ -58,7 +58,7 @@ func (r *RunwayAdapter) UploadImage(ctx context.Context, localPath string) (stri
 	if err != nil {
 		return "", fmt.Errorf("create upload init request: %w", err)
 	}
-	r.setHeaders(initReq)
+	r.SetHeaders(initReq)
 
 	initResp, err := r.client.Do(initReq)
 	if err != nil {

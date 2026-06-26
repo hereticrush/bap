@@ -7,16 +7,19 @@
  */
 package video
 
-import "context"
+import (
+	"context"
+	"net/http"
+)
 
 /* GenerationStatus enumerates the possible states of an AI generation task. */
 type GenerationStatus int
 
 const (
 	StatusPending    GenerationStatus = iota /* Task accepted, not yet started */
-	StatusProcessing                        /* AI is generating the video */
-	StatusCompleted                         /* Video is ready for download */
-	StatusFailed                            /* Generation failed */
+	StatusProcessing                         /* AI is generating the video */
+	StatusCompleted                          /* Video is ready for download */
+	StatusFailed                             /* Generation failed */
 )
 
 /*
@@ -65,4 +68,9 @@ type AIVideoProvider interface {
 	 * generation task identified by taskID.
 	 */
 	CheckStatus(ctx context.Context, taskID string) (GenerationResult, error)
+
+	/*
+	 * SetHeaders applies the authentication and meta headers to an HTTP request.
+	 */
+	SetHeaders(req *http.Request)
 }

@@ -110,7 +110,7 @@ func (l *LumaAdapter) GenerateVideo(ctx context.Context, req GenerationRequest) 
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
-	l.setHeaders(httpReq)
+	l.SetHeaders(httpReq)
 
 	resp, err := l.client.Do(httpReq)
 	if err != nil {
@@ -168,7 +168,7 @@ func (l *LumaAdapter) CheckStatus(ctx context.Context, taskID string) (Generatio
 	if err != nil {
 		return GenerationResult{}, fmt.Errorf("create request: %w", err)
 	}
-	l.setHeaders(httpReq)
+	l.SetHeaders(httpReq)
 
 	resp, err := l.client.Do(httpReq)
 	if err != nil {
@@ -247,7 +247,7 @@ func (l *LumaAdapter) checkRateLimit() error {
 }
 
 /* setHeaders applies authorization headers to every Luma API request. */
-func (l *LumaAdapter) setHeaders(req *http.Request) {
+func (l *LumaAdapter) SetHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", l.apiKey))
 }

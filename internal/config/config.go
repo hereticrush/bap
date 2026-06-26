@@ -27,6 +27,9 @@ type Config struct {
 	LumaAPIKey       string
 	LumaModel        string /* ray-2, photon-1, photon-flash-1, etc. */
 	LumaMaxPerHour   int    /* Sliding-window hourly rate limit for Luma API */
+	KlingAPIKey      string
+	KlingModel       string /* kling-v3, kling-v3-turbo, etc. */
+	KlingMaxPerHour  int    /* Sliding-window hourly rate limit for Kling API */
 
 
 	/* AI Prompt Builder */
@@ -125,6 +128,16 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("LUMA_MAX_PER_HOUR must be a valid integer: %w", err)
 	}
 	cfg.LumaMaxPerHour = lumaRate
+
+	cfg.KlingAPIKey = os.Getenv("KLING_API_KEY")
+	cfg.KlingModel = withDefault("KLING_MODEL", "kling-v3")
+
+	klingRateStr := withDefault("KLING_MAX_PER_HOUR", "10")
+	klingRate, err := strconv.Atoi(klingRateStr)
+	if err != nil {
+		return nil, fmt.Errorf("KLING_MAX_PER_HOUR must be a valid integer: %w", err)
+	}
+	cfg.KlingMaxPerHour = klingRate
 
 	/* --- AI Prompt Builder --- */
 	cfg.ActivePromptBuilder = withDefault("ACTIVE_PROMPT_BUILDER", "PASSTHROUGH")

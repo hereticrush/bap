@@ -29,6 +29,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/hereticrush/bap/internal/adapter/storage"
 )
 
 /* Runway REST API base URL and required version header. */
@@ -44,18 +46,20 @@ type RunwayAdapter struct {
 	callLog    []time.Time
 	mu         sync.Mutex
 	client     *http.Client
+	storage    storage.StorageProvider
 }
 
 /*
  * NewRunwayAdapter creates a RunwayAdapter with the given API key,
- * model name, and hourly rate limit cap.
+ * model name, hourly rate limit cap, and cloud storage provider.
  *
  * Parameters:
  *   apiKey     — Runway API secret for Bearer authentication
  *   model      — Model identifier (e.g., "gen3a_turbo", "gen4_turbo")
  *   maxPerHour — Maximum API calls allowed per rolling hour
+ *   storage    — Storage provider for potential fallback uploads
  */
-func NewRunwayAdapter(apiKey, model string, maxPerHour int) *RunwayAdapter {
+func NewRunwayAdapter(apiKey, model string, maxPerHour int, storage storage.StorageProvider) *RunwayAdapter {
 	return &RunwayAdapter{
 		apiKey:     apiKey,
 		model:      model,
@@ -64,6 +68,7 @@ func NewRunwayAdapter(apiKey, model string, maxPerHour int) *RunwayAdapter {
 		client: &http.Client{
 			Timeout: 120 * time.Second,
 		},
+		storage:    storage,
 	}
 }
 
@@ -133,7 +138,7 @@ func (r *RunwayAdapter) GenerateVideo(ctx context.Context, req GenerationRequest
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
-	r.setHeaders(httpReq)
+	r.SetHeaders(httpReq)
 
 	resp, err := r.client.Do(httpReq)
 	if err != nil {
@@ -199,7 +204,7 @@ func (r *RunwayAdapter) CheckStatus(ctx context.Context, taskID string) (Generat
 	if err != nil {
 		return GenerationResult{}, fmt.Errorf("create request: %w", err)
 	}
-	r.setHeaders(httpReq)
+	r.SetHeaders(httpReq)
 
 	resp, err := r.client.Do(httpReq)
 	if err != nil {
@@ -271,7 +276,7 @@ func (r *RunwayAdapter) checkRateLimit() error {
  * setHeaders applies the required authentication and version
  * headers to every Runway API request.
  */
-func (r *RunwayAdapter) setHeaders(req *http.Request) {
+func (r *RunwayAdapter) SetHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", r.apiKey))
 	req.Header.Set("X-Runway-Version", runwayAPIVersion)

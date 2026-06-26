@@ -319,9 +319,11 @@ func selectVideoProviders(cfg *config.Config, storageProv storage.StorageProvide
 	for _, name := range cfg.VideoProviders {
 		switch name {
 		case "RUNWAY":
-			providers = append(providers, video.NewRunwayAdapter(cfg.RunwayAPIKey, cfg.RunwayModel, cfg.RunwayMaxPerHour))
+			providers = append(providers, video.NewRunwayAdapter(cfg.RunwayAPIKey, cfg.RunwayModel, cfg.RunwayMaxPerHour, storageProv))
 		case "LUMA":
 			providers = append(providers, video.NewLumaAdapter(cfg.LumaAPIKey, cfg.LumaModel, cfg.LumaMaxPerHour, storageProv))
+		case "KLING":
+			providers = append(providers, video.NewKlingAdapter(cfg.KlingAPIKey, cfg.KlingModel, cfg.KlingMaxPerHour, storageProv))
 		default:
 			return nil, fmt.Errorf("unknown video provider: %s", name)
 		}
