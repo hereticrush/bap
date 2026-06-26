@@ -27,7 +27,7 @@ logging.basicConfig(
 
 DB_PATH = os.environ.get("DB_PATH", "/app/data/bap.db")
 CRAWLER_FEED_URLS = os.environ.get("CRAWLER_FEED_URLS", "")
-CRAWLER_INTERVAL_SECONDS = int(os.environ.get("CRAWLER_INTERVAL_SECONDS", "7200"))
+CRAWLER_INTERVAL_SECONDS = int(os.environ.get("CRAWLER_INTERVAL_SECONDS", "3600"))
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 CRAWLER_GEMINI_MODEL = os.environ.get("CRAWLER_GEMINI_MODEL", "gemini-2.5-flash")
 
@@ -127,13 +127,15 @@ def parse_feed(feed_url):
             title_el = item.find("title")
             link_el = item.find("link")
             desc_el = item.find("description")
+            date_el = item.find("pubDate")
 
             title = title_el.text.strip() if title_el is not None and title_el.text else ""
             link = link_el.text.strip() if link_el is not None and link_el.text else ""
             desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ""
+            date = date_el.text.strip() if date_el is not None and date_el.text else ""
 
             if link:
-                items.append({"title": title, "link": link, "description": desc})
+                items.append({"title": title, "link": link, "description": desc, "pubDate": date})
 
         # Parse Atom <entry> entries
         for entry in root.findall(".//{http://www.w3.org/2005/Atom}entry"):
@@ -143,13 +145,15 @@ def parse_feed(feed_url):
                 entry.find("{http://www.w3.org/2005/Atom}summary") or 
                 entry.find("{http://www.w3.org/2005/Atom}content")
             )
+            updated_el = entry.find("{http://www.w3.org/2005/Atom}updated")
 
             title = title_el.text.strip() if title_el is not None and title_el.text else ""
             link = link_el.attrib.get("href", "").strip() if link_el is not None else ""
             desc = summary_el.text.strip() if summary_el is not None and summary_el.text else ""
+            updated = updated_el.text.strip() if updated_el is not None and updated_el.text else ""
 
             if link:
-                items.append({"title": title, "link": link, "description": desc})
+                items.append({"title": title, "link": link, "description": desc, "updated": updated})
 
         logging.info(f"Found {len(items)} items in feed {feed_url}")
         return items
@@ -338,7 +342,7 @@ def main():
     logging.info("Starting BAP Web Crawler service...")
     
     if not CRAWLER_FEED_URLS:
-        logging.warning("No CRAWLER_FEED_URLS configured. Sleeping indefinitely.")
+        logging.warning("No feeds url to crawl through. Sleeping indefinitely.")
         while True:
             time.sleep(CRAWLER_INTERVAL_SECONDS)
 

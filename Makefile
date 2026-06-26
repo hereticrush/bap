@@ -12,9 +12,15 @@ BINARY   := bap
 CMD_PATH := ./cmd/main.go
 
 # Version injection via ldflags
-VERSION  := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-DATE     := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
+ifeq ($(OS),Windows_NT)
+    VERSION := $(shell git describe --tags --always --dirty 2>nul || echo dev)
+    COMMIT  := $(shell git rev-parse --short HEAD 2>nul || echo unknown)
+    DATE    := $(shell powershell -Command "Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ'")
+else
+    VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+    COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    DATE    := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
+endif
 LDFLAGS  := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
 # Docker image coordinates
@@ -29,7 +35,7 @@ export CGO_ENABLED := 1
 # ──────────────────────────────────────────────
 
 .PHONY: all build test lint fmt vet deps clean \
-        docker-build docker-up docker-down docker-test docker-deps \
+        docker-build docker-up docker-down docker-test docker-deps docker-crawler \
         version help
 
 all: lint build ## Run lint then build (default)
@@ -73,17 +79,25 @@ docker-down: ## Stop all services
 
 docker-test: ## Run tests inside a Docker container (CGO + Alpine)
 	docker run --rm \
-	  -v "$$(pwd)":/src \
+	  -v "$(CURDIR)":/src \
 	  -w /src \
 	  golang:1.25-alpine \
 	  sh -c "apk add --no-cache gcc musl-dev > /dev/null && go mod download && CGO_ENABLED=1 go test -v ./..."
 
 docker-deps: ## Fetch and tidy dependencies inside a Docker container
 	docker run --rm \
-	  -v "$$(pwd)":/src \
+	  -v "$(CURDIR)":/src \
 	  -w /src \
 	  golang:1.25-alpine \
 	  sh -c "apk add --no-cache gcc musl-dev > /dev/null && go mod tidy && go mod download"
+
+docker-crawler:
+	docker run --rm \
+		--env-file .env \
+		-v "$(CURDIR)":/app \
+		-w /app \
+		python:3.11-alpine \
+		sh -c "apk add --no-cache gcc musl-dev > /dev/null && pip install -r crawler/requirements.txt && python crawler/main.py"
 
 # ──────────────────────────────────────────────
 # Informational targets
