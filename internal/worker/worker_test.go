@@ -10,6 +10,7 @@ package worker
 import (
 	"context"
 	"database/sql"
+	"net/http"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -38,6 +39,7 @@ func (m *mockVideoProvider) CheckStatus(ctx context.Context, taskID string) (vid
 	m.checkCalled = true
 	return m.statusToReturn, nil
 }
+func (m *mockVideoProvider) SetHeaders(req *http.Request) {}
 
 /* Mock publisher for testing */
 type mockPublisher struct {
